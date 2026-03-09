@@ -15,7 +15,7 @@ export function AgentMessage({ event }: AgentMessageProps) {
     case "thinking":
       return (
         <View style={styles.container}>
-          <AgentThinking thinking={event.thinking || "Thinking..."} />
+          <AgentThinking thinking={event.thinking || event.content || "Thinking..."} />
         </View>
       );
 
@@ -93,6 +93,21 @@ export function AgentMessage({ event }: AgentMessageProps) {
           </View>
         </View>
       );
+
+    case "wait":
+      return (
+        <View style={styles.container}>
+          <View style={styles.waitContainer}>
+            <Ionicons name="hourglass" size={14} color="#FF9F0A" />
+            <Text style={styles.waitText}>
+              {event.prompt || "Waiting for input..."}
+            </Text>
+          </View>
+        </View>
+      );
+
+    case "done":
+      return null;
 
     default:
       return null;
@@ -229,6 +244,23 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 13,
     color: "#FF6B6B",
+    lineHeight: 18,
+  },
+  waitContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255, 159, 10, 0.08)",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 159, 10, 0.15)",
+  },
+  waitText: {
+    flex: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: "#FF9F0A",
     lineHeight: 18,
   },
 });

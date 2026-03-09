@@ -19,13 +19,22 @@ function ToolIcon({ name }: { name: string }) {
     case "web_search":
       return <Ionicons name="search" size={14} color="#5AC8FA" />;
     case "web_browse":
+    case "browser_navigate":
+    case "browser_view":
+    case "browser_restart":
       return <Ionicons name="globe" size={14} color="#FF9F0A" />;
     case "file_read":
     case "file_write":
-    case "file_find":
+    case "file_str_replace":
+    case "file_find_by_name":
+    case "file_find_in_content":
       return <Ionicons name="document-text" size={14} color="#FFD60A" />;
-    case "message_notify":
+    case "message_notify_user":
+    case "message_ask_user":
       return <Ionicons name="chatbubble" size={14} color="#BF5AF2" />;
+    case "mcp_call_tool":
+    case "mcp_list_tools":
+      return <Ionicons name="extension-puzzle" size={14} color="#64D2FF" />;
     default:
       return <Ionicons name="construct" size={14} color="#8E8E93" />;
   }
@@ -36,10 +45,18 @@ function ToolLabel({ name }: { name: string }) {
     shell_exec: "Shell",
     web_search: "Web Search",
     web_browse: "Browse URL",
+    browser_navigate: "Navigate",
+    browser_view: "View Page",
+    browser_restart: "Restart Browser",
     file_read: "Read File",
     file_write: "Write File",
-    file_find: "Find Files",
-    message_notify: "Notification",
+    file_str_replace: "Edit File",
+    file_find_by_name: "Find Files",
+    file_find_in_content: "Search Content",
+    message_notify_user: "Notification",
+    message_ask_user: "Ask User",
+    mcp_call_tool: "MCP Tool",
+    mcp_list_tools: "MCP List",
   };
   return (
     <Text style={styles.toolLabel}>{labels[name] || name}</Text>
@@ -198,6 +215,15 @@ export function AgentToolView({
               )}
               {toolContent.type === "file" && toolContent.content != null && (
                 <FileContent content={toolContent.content} />
+              )}
+              {toolContent.type === "mcp" && toolContent.result != null && (
+                <View style={styles.shellContainer}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <Text style={styles.shellText} selectable>
+                      {toolContent.result || "(no result)"}
+                    </Text>
+                  </ScrollView>
+                </View>
               )}
             </View>
           )}

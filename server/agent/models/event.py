@@ -1,105 +1,165 @@
 """
-Event models for the AI agent SSE streaming.
-Inspired by ai-manus event system.
+Event models for the AI agent.
+Matching ai-manus event architecture with typed events for SSE streaming.
+
+Ported from ai-manus: app/domain/models/event.py
+Provides complete event hierarchy for Plan-Act flow communication.
 """
 import uuid
 import time
-import json
 from enum import Enum
-from typing import Dict, Any, Optional, List
+from typing import Optional, Dict, Any, List, Union
+from pydantic import BaseModel, Field
 
 
 class PlanStatus(str, Enum):
+    CREATING = "creating"
     CREATED = "created"
+    UPDATING = "updating"
     UPDATED = "updated"
+    RUNNING = "running"
     COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class StepStatus(str, Enum):
-    STARTED = "started"
-    FAILED = "failed"
+    PENDING = "pending"
+    RUNNING = "running"
     COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class ToolStatus(str, Enum):
     CALLING = "calling"
-    CALLED = "called"
+    RESULT = "result"
+    ERROR = "error"
 
 
-class AgentEvent:
-    """Base event class for agent SSE streaming."""
+# Tool content models matching ai-manus
+class BrowserToolContent(BaseModel):
+    """Content for browser tool events."""
+    url: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    screenshot: Optional[str] = None
 
-    def __init__(self, event_type: str, **kwargs):
-        self.type = event_type
-        self.id = str(uuid.uuid4())[:8]
-        self.timestamp = time.time()
-        self.data = kwargs
+
+class SearchToolContent(BaseModel):
+    """Content for search tool events."""
+    query: Optional[str] = None
+    results: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ShellToolContent(BaseModel):
+    """Content for shell tool events."""
+    command: Optional[str] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    return_code: Optional[int] = None
+
+
+class FileToolContent(BaseModel):
+    """Content for file tool events."""
+    file: Optional[str] = None
+    content: Optional[str] = None
+    operation: Optional[str] = None
+
+
+class McpToolContent(BaseModel):
+    """Content for MCP tool events."""
+    server: Optional[str] = None
+    tool: Optional[str] = None
+    result: Optional[Any] = None
+
+
+# Union type for tool content
+ToolContent = Union[
+    BrowserToolContent, SearchToolContent, ShellToolContent,
+    FileToolContent, McpToolContent, Dict[str, Any]
+]
+
+
+class BaseEvent(BaseModel):
+    """Base event class for all agent events."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    timestamp: float = Field(default_factory=time.time)
+    type: str = "base"
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": self.type,
-            "id": self.id,
-            "timestamp": self.timestamp,
-            **self.data,
-        }
+        return self.model_dump(exclude_none=True)
 
     def to_json(self) -> str:
-        return json.dumps(self.to_dict(), default=str)
+        return self.model_dump_json(exclude_none=True)
 
 
-class PlanEvent(AgentEvent):
-    def __init__(self, status: PlanStatus, plan: Dict[str, Any]):
-        super().__init__("plan", status=status.value, plan=plan)
+class PlanEvent(BaseEvent):
+    """Event for plan creation/updates."""
+    type: str = "plan"
+    plan: Optional[Dict[str, Any]] = None
+    status: PlanStatus = PlanStatus.CREATING
+    step: Optional[Dict[str, Any]] = None
 
 
-class StepEvent(AgentEvent):
-    def __init__(self, status: StepStatus, step: Dict[str, Any]):
-        super().__init__("step", status=status.value, step=step)
+class StepEvent(BaseEvent):
+    """Event for step status changes."""
+    type: str = "step"
+    step: Optional[Dict[str, Any]] = None
+    status: StepStatus = StepStatus.PENDING
 
 
-class ToolEvent(AgentEvent):
-    def __init__(
-        self,
-        status: ToolStatus,
-        tool_name: str,
-        function_name: str,
-        function_args: Dict[str, Any],
-        tool_call_id: str = "",
-        function_result: Optional[Any] = None,
-        tool_content: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(
-            "tool",
-            status=status.value,
-            tool_name=tool_name,
-            function_name=function_name,
-            function_args=function_args,
-            tool_call_id=tool_call_id or str(uuid.uuid4())[:8],
-            function_result=function_result,
-            tool_content=tool_content,
-        )
+class ToolEvent(BaseEvent):
+    """Event for tool calls and results."""
+    type: str = "tool"
+    tool_call_id: Optional[str] = None
+    tool_name: str = ""
+    tool_content: Optional[Dict[str, Any]] = None
+    function_name: str = ""
+    function_args: Dict[str, Any] = Field(default_factory=dict)
+    status: ToolStatus = ToolStatus.CALLING
+    function_result: Optional[Any] = None
 
 
-class MessageEvent(AgentEvent):
-    def __init__(self, message: str, role: str = "assistant"):
-        super().__init__("message", message=message, role=role)
+class MessageEvent(BaseEvent):
+    """Event for messages to/from user."""
+    type: str = "message"
+    role: str = "assistant"
+    message: str = ""
+    attachments: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-class ErrorEvent(AgentEvent):
-    def __init__(self, error: str):
-        super().__init__("error", error=error)
+class ErrorEvent(BaseEvent):
+    """Event for errors."""
+    type: str = "error"
+    error: str = ""
+    details: Optional[str] = None
 
 
-class DoneEvent(AgentEvent):
-    def __init__(self):
-        super().__init__("done")
+class DoneEvent(BaseEvent):
+    """Event signaling agent completion."""
+    type: str = "done"
+    success: bool = True
 
 
-class TitleEvent(AgentEvent):
-    def __init__(self, title: str):
-        super().__init__("title", title=title)
+class TitleEvent(BaseEvent):
+    """Event for setting conversation title."""
+    type: str = "title"
+    title: str = ""
 
 
-class ThinkingEvent(AgentEvent):
-    def __init__(self, thinking: str):
-        super().__init__("thinking", thinking=thinking)
+class ThinkingEvent(BaseEvent):
+    """Event for agent thinking/reasoning."""
+    type: str = "thinking"
+    content: str = ""
+
+
+class WaitEvent(BaseEvent):
+    """Event for waiting on user input (matching ai-manus)."""
+    type: str = "wait"
+    prompt: Optional[str] = None
+
+
+# Union type for all agent events
+AgentEvent = Union[
+    ErrorEvent, PlanEvent, ToolEvent, StepEvent,
+    MessageEvent, DoneEvent, TitleEvent, ThinkingEvent, WaitEvent
+]
