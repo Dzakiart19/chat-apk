@@ -53,6 +53,127 @@ export async function* streamChat(
   }
 }
 
+/**
+ * Agent event types from the autonomous AI agent backend.
+ * Inspired by ai-manus event system.
+ */
+export interface AgentPlanStep {
+  id: string;
+  description: string;
+  status: "pending" | "running" | "completed" | "failed";
+  result?: string;
+  error?: string;
+  success?: boolean;
+  attachments?: string[];
+}
+
+export interface AgentPlan {
+  id: string;
+  title: string;
+  goal: string;
+  language: string;
+  steps: AgentPlanStep[];
+  message?: string;
+  status: string;
+}
+
+export interface ToolContent {
+  type: "shell" | "search" | "browser" | "file";
+  console?: string;
+  results?: Array<{ title: string; url: string; snippet: string }>;
+  title?: string;
+  content?: string;
+}
+
+export type AgentEventType =
+  | "plan"
+  | "step"
+  | "tool"
+  | "message"
+  | "error"
+  | "done"
+  | "title"
+  | "thinking";
+
+export interface AgentEvent {
+  type: AgentEventType;
+  id?: string;
+  timestamp?: number;
+  // Plan events
+  plan?: AgentPlan;
+  status?: string;
+  // Step events
+  step?: AgentPlanStep;
+  // Tool events
+  tool_name?: string;
+  function_name?: string;
+  function_args?: Record<string, unknown>;
+  tool_call_id?: string;
+  function_result?: string;
+  tool_content?: ToolContent;
+  // Message events
+  message?: string;
+  role?: string;
+  // Error events
+  error?: string;
+  // Title events
+  title?: string;
+  // Thinking events
+  thinking?: string;
+}
+
+/**
+ * Stream agent events from the autonomous AI agent backend via SSE.
+ * Yields AgentEvent objects as they arrive.
+ */
+export async function* streamAgent(
+  message: string,
+  apiUrl: string,
+  signal?: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const response = await fetch(`${apiUrl}api/agent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, model: "gpt-4o-mini" }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Agent request failed: ${response.status} ${text}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("data: ")) {
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") return;
+        try {
+          const parsed: AgentEvent = JSON.parse(data);
+          yield parsed;
+        } catch {
+          // Skip malformed JSON
+          continue;
+        }
+      }
+    }
+  }
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -61,6 +182,13 @@ export interface ChatMessage {
   attachments?: ChatAttachment[];
   isStreaming?: boolean;
   error?: string;
+  // Agent-specific fields
+  agentEvent?: AgentEvent;
+  eventType?: AgentEventType;
+  plan?: AgentPlan;
+  step?: AgentPlanStep;
+  toolContent?: ToolContent;
+  thinking?: string;
 }
 
 export interface ChatAttachment {

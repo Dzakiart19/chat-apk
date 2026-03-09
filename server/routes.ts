@@ -100,6 +100,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Agent API endpoint with SSE streaming - Full autonomous AI agent mode
+  app.post("/api/agent", (req, res) => {
+    const { message, messages, model } = req.body;
+
+    if (!message && (!messages || !Array.isArray(messages))) {
+      res.status(400).json({ error: "message or messages array is required" });
+      return;
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    const agentScript = path.resolve(
+      process.cwd(),
+      "server",
+      "agent",
+      "agent_flow.py",
+    );
+    const proc = spawn("python3", ["-m", "server.agent.agent_flow"], {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+    });
+
+    const input = JSON.stringify({
+      message: message || "",
+      messages: messages || [],
+      model: model || "gpt-4o-mini",
+    });
+    proc.stdin.write(input);
+    proc.stdin.end();
+
+    let buffer = "";
+    let doneSent = false;
+
+    proc.stdout.on("data", (data: Buffer) => {
+      buffer += data.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === "done") {
+              doneSent = true;
+              res.write("data: [DONE]\n\n");
+            } else {
+              // Forward all agent events as SSE
+              res.write(`data: ${JSON.stringify(parsed)}\n\n`);
+            }
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+    });
+
+    proc.stderr.on("data", (data: Buffer) => {
+      console.error("agent stderr:", data.toString());
+    });
+
+    proc.on("close", () => {
+      if (!res.writableEnded) {
+        if (!doneSent) {
+          res.write("data: [DONE]\n\n");
+        }
+        res.end();
+      }
+    });
+
+    proc.on("error", (err) => {
+      console.error("agent process error:", err);
+      if (!res.writableEnded) {
+        res.write(
+          `data: ${JSON.stringify({ type: "error", error: "Agent service error" })}\n\n`,
+        );
+        res.write("data: [DONE]\n\n");
+        res.end();
+      }
+    });
+
+    res.on("close", () => {
+      if (!proc.killed) {
+        proc.kill();
+      }
+    });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
