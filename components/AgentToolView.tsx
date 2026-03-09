@@ -40,28 +40,6 @@ function ToolIcon({ name }: { name: string }) {
   }
 }
 
-function ToolLabel({ name }: { name: string }) {
-  const labels: Record<string, string> = {
-    shell_exec: "Shell",
-    web_search: "Web Search",
-    web_browse: "Browse URL",
-    browser_navigate: "Navigate",
-    browser_view: "View Page",
-    browser_restart: "Restart Browser",
-    file_read: "Read File",
-    file_write: "Write File",
-    file_str_replace: "Edit File",
-    file_find_by_name: "Find Files",
-    file_find_in_content: "Search Content",
-    message_notify_user: "Notification",
-    message_ask_user: "Ask User",
-    mcp_call_tool: "MCP Tool",
-    mcp_list_tools: "MCP List",
-  };
-  return (
-    <Text style={styles.toolLabel}>{labels[name] || name}</Text>
-  );
-}
 
 function ShellContent({ content }: { content: string }) {
   return (
@@ -134,6 +112,90 @@ function FileContent({ content }: { content: string }) {
   );
 }
 
+/**
+ * Get the primary argument to show inline on the tool card (ai-manus style).
+ * Maps function names to their most relevant argument key.
+ */
+function getToolFunctionArg(functionName: string, args: Record<string, unknown>): string {
+  const argKeyMap: Record<string, string> = {
+    shell_exec: "command",
+    shell_view: "id",
+    shell_wait: "id",
+    shell_write_to_process: "input",
+    shell_kill_process: "id",
+    file_read: "file",
+    file_write: "file",
+    file_str_replace: "file",
+    file_find_by_name: "path",
+    file_find_in_content: "file",
+    browser_navigate: "url",
+    browser_view: "page",
+    browser_restart: "url",
+    browser_click: "element",
+    browser_type: "text",
+    browser_scroll: "direction",
+    browser_scroll_to_bottom: "page",
+    browser_read_links: "page",
+    browser_console_view: "console",
+    browser_save_image: "save_dir",
+    web_search: "query",
+    web_browse: "url",
+    message_notify_user: "text",
+    message_ask_user: "text",
+    mcp_call_tool: "tool_name",
+    mcp_list_tools: "",
+  };
+  const key = argKeyMap[functionName] || "";
+  if (!key) {
+    // Fall back to first arg value
+    const firstKey = Object.keys(args)[0];
+    if (firstKey) {
+      const val = String(args[firstKey] ?? "");
+      return val.length > 60 ? val.slice(0, 60) + "..." : val;
+    }
+    return "";
+  }
+  const val = String(args[key] ?? "");
+  // Strip common path prefix for cleaner display
+  const cleaned = val.replace(/^\/home\/ubuntu\//, "");
+  return cleaned.length > 60 ? cleaned.slice(0, 60) + "..." : cleaned;
+}
+
+/**
+ * Get the display label for the function (ai-manus style action description).
+ */
+function getToolFunctionLabel(functionName: string): string {
+  const labelMap: Record<string, string> = {
+    shell_exec: "Executing command",
+    shell_view: "Viewing output",
+    shell_wait: "Waiting for command",
+    shell_write_to_process: "Writing to process",
+    shell_kill_process: "Terminating process",
+    file_read: "Reading file",
+    file_write: "Writing file",
+    file_str_replace: "Replacing content",
+    file_find_by_name: "Finding file",
+    file_find_in_content: "Searching content",
+    browser_navigate: "Navigating to page",
+    browser_view: "Viewing page",
+    browser_click: "Clicking element",
+    browser_type: "Entering text",
+    browser_scroll: "Scrolling page",
+    browser_scroll_to_bottom: "Scrolling to bottom",
+    browser_read_links: "Reading links",
+    browser_console_view: "Viewing console",
+    browser_restart: "Restarting browser",
+    browser_save_image: "Saving image",
+    web_search: "Searching web",
+    web_browse: "Browsing URL",
+    message_notify_user: "Sending notification",
+    message_ask_user: "Asking question",
+    mcp_call_tool: "Calling MCP tool",
+    mcp_list_tools: "Listing MCP tools",
+  };
+  return labelMap[functionName] || functionName;
+}
+
 export function AgentToolView({
   toolName,
   functionName,
@@ -145,17 +207,14 @@ export function AgentToolView({
   const [expanded, setExpanded] = useState(false);
   const isCalling = status === "calling";
   const isCalled = status === "called";
+  const isError = status === "error";
 
-  // Get a brief summary of the args
-  const argsSummary = Object.entries(functionArgs)
-    .map(([key, val]) => {
-      const strVal = String(val);
-      return `${key}: ${strVal.length > 60 ? strVal.slice(0, 60) + "..." : strVal}`;
-    })
-    .join(", ");
+  // ai-manus style: show function action label + primary arg inline
+  const functionLabel = getToolFunctionLabel(functionName);
+  const primaryArg = getToolFunctionArg(functionName, functionArgs);
 
   return (
-    <View style={[styles.container, isCalling && styles.containerCalling]}>
+    <View style={[styles.container, isCalling && styles.containerCalling, isError && styles.containerError]}>
       <TouchableOpacity
         style={styles.header}
         onPress={() => setExpanded(!expanded)}
@@ -163,27 +222,30 @@ export function AgentToolView({
       >
         <View style={styles.headerLeft}>
           <ToolIcon name={functionName} />
-          <ToolLabel name={functionName} />
+          <Text style={styles.toolLabel}>{functionLabel}</Text>
+          {primaryArg ? (
+            <Text style={styles.primaryArg} numberOfLines={1}>
+              <Text style={styles.primaryArgCode}>{primaryArg}</Text>
+            </Text>
+          ) : null}
+        </View>
+        <View style={styles.headerRight}>
           {isCalling && (
             <Ionicons name="sync" size={12} color="#6C5CE7" />
           )}
           {isCalled && (
-            <Ionicons name="checkmark" size={12} color="#30D158" />
+            <Ionicons name="checkmark-circle" size={14} color="#30D158" />
           )}
+          {isError && (
+            <Ionicons name="close-circle" size={14} color="#FF453A" />
+          )}
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={14}
+            color="#636366"
+          />
         </View>
-        <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={14}
-          color="#636366"
-        />
       </TouchableOpacity>
-
-      {/* Brief args display */}
-      {!expanded && argsSummary && (
-        <Text style={styles.argsSummary} numberOfLines={1}>
-          {argsSummary}
-        </Text>
-      )}
 
       {/* Expanded content */}
       {expanded && (
@@ -198,8 +260,8 @@ export function AgentToolView({
             ))}
           </View>
 
-          {/* Tool content */}
-          {toolContent && isCalled && (
+          {/* Tool content - show for both called and error states */}
+          {toolContent && (isCalled || isError) && (
             <View style={styles.resultContainer}>
               {toolContent.type === "shell" && toolContent.console != null && (
                 <ShellContent content={toolContent.console} />
@@ -227,6 +289,19 @@ export function AgentToolView({
               )}
             </View>
           )}
+
+          {/* Function result text fallback */}
+          {!toolContent && functionResult && (isCalled || isError) && (
+            <View style={styles.resultContainer}>
+              <View style={styles.shellContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <Text style={[styles.shellText, isError && styles.errorResultText]} selectable numberOfLines={10}>
+                    {functionResult.slice(0, 500)}
+                  </Text>
+                </ScrollView>
+              </View>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -236,14 +311,20 @@ export function AgentToolView({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#141418",
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 15,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     marginVertical: 2,
     borderWidth: 1,
     borderColor: "#2C2C30",
   },
   containerCalling: {
     borderColor: "rgba(108, 92, 231, 0.3)",
+    backgroundColor: "rgba(108, 92, 231, 0.04)",
+  },
+  containerError: {
+    borderColor: "rgba(255, 69, 58, 0.3)",
+    backgroundColor: "rgba(255, 69, 58, 0.04)",
   },
   header: {
     flexDirection: "row",
@@ -254,18 +335,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   toolLabel: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 12,
+    fontSize: 13,
     color: "#E8E8ED",
   },
-  argsSummary: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 11,
-    color: "#636366",
-    marginTop: 4,
-    paddingLeft: 22,
+  primaryArg: {
+    flex: 1,
+    minWidth: 0,
+  },
+  primaryArgCode: {
+    fontFamily: "monospace",
+    fontSize: 12,
+    color: "#8E8E93",
+  },
+  errorResultText: {
+    color: "#FF6B6B",
   },
   expandedContent: {
     marginTop: 8,

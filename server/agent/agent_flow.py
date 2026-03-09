@@ -121,6 +121,44 @@ TOOL_ALIASES: Dict[str, str] = {
     "search": "web_search",
 }
 
+# Toolkit type mapping (function_name -> toolkit name) matching ai-manus
+# In ai-manus, each tool belongs to a toolkit with a name like "shell", "browser", etc.
+# The ToolEvent uses tool_name for the toolkit name and function_name for the specific function.
+TOOLKIT_MAP: Dict[str, str] = {
+    # Shell toolkit
+    "shell_exec": "shell",
+    "shell_view": "shell",
+    "shell_wait": "shell",
+    "shell_write_to_process": "shell",
+    "shell_kill_process": "shell",
+    # File toolkit
+    "file_read": "file",
+    "file_write": "file",
+    "file_str_replace": "file",
+    "file_find_by_name": "file",
+    "file_find_in_content": "file",
+    # Browser toolkit
+    "browser_navigate": "browser",
+    "browser_view": "browser",
+    "browser_click": "browser",
+    "browser_type": "browser",
+    "browser_scroll": "browser",
+    "browser_scroll_to_bottom": "browser",
+    "browser_read_links": "browser",
+    "browser_console_view": "browser",
+    "browser_restart": "browser",
+    "browser_save_image": "browser",
+    # Search toolkit
+    "web_search": "search",
+    "web_browse": "browser",
+    # Message toolkit
+    "message_notify_user": "message",
+    "message_ask_user": "message",
+    # MCP toolkit
+    "mcp_call_tool": "mcp",
+    "mcp_list_tools": "mcp",
+}
+
 # -- Airforce API Configuration --
 AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
 AIRFORCE_API_KEY = (
@@ -261,6 +299,11 @@ def resolve_tool_name(name: str) -> Optional[str]:
     if name in TOOL_ALIASES:
         return TOOL_ALIASES[name]
     return None
+
+
+def get_toolkit_name(function_name: str) -> str:
+    """Get the toolkit name for a function (matching ai-manus toolkit naming)."""
+    return TOOLKIT_MAP.get(function_name, "unknown")
 
 
 def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> ToolResult:
@@ -508,10 +551,11 @@ class DzeckAgent:
             return ("Unknown tool '{}'. Available: {}"
                     .format(fn_name, ", ".join(TOOLS.keys())))
 
+        toolkit_name = get_toolkit_name(resolved)
         emit_event(
             "tool",
             status=ToolStatus.CALLING.value,
-            tool_name=resolved,
+            tool_name=toolkit_name,
             function_name=resolved,
             function_args=fn_args,
             tool_call_id=tool_call_id,
@@ -530,14 +574,14 @@ class DzeckAgent:
                        message=fn_args.get("text", ""),
                        role="assistant")
 
-        result_status = (ToolStatus.RESULT if tool_result.success
+        result_status = (ToolStatus.CALLED if tool_result.success
                          else ToolStatus.ERROR)
         fn_result = (str(tool_result.message)[:3000]
                      if tool_result.message else "")
         emit_event(
             "tool",
             status=result_status.value,
-            tool_name=resolved,
+            tool_name=toolkit_name,
             function_name=resolved,
             function_args=fn_args,
             tool_call_id=tool_call_id,
@@ -881,14 +925,104 @@ class DzeckAgent:
                 role="assistant",
             )
 
+    def _is_simple_query(self, user_message: str) -> bool:
+        """Detect if the user message is a simple query that doesn't need tools.
+
+        Matching ai-manus behavior: the agent should be smart about when
+        to use tools vs. when to respond directly. Simple greetings,
+        casual questions, and basic knowledge queries don't need the
+        full Plan-Act flow.
+        """
+        msg = user_message.strip().lower()
+        # Short messages are often simple greetings or quick questions
+        word_count = len(msg.split())
+        if word_count <= 3:
+            # Check for greetings and simple phrases
+            simple_patterns = [
+                "hi", "hello", "hey", "halo", "hai", "hei",
+                "thanks", "thank you", "terima kasih", "makasih",
+                "ok", "okay", "oke", "baik", "siap",
+                "yes", "no", "ya", "tidak",
+                "bye", "goodbye", "sampai jumpa",
+                "good morning", "good night", "selamat pagi",
+                "selamat malam", "selamat siang",
+                "who are you", "siapa kamu", "siapa anda",
+                "what can you do", "apa yang bisa",
+                "how are you", "apa kabar",
+            ]
+            for pattern in simple_patterns:
+                if pattern in msg:
+                    return True
+
+        # Detect simple knowledge questions (no tool needed)
+        knowledge_starters = [
+            "what is", "what are", "who is", "who are",
+            "when was", "when is", "where is", "where are",
+            "why is", "why are", "how does", "how do",
+            "explain", "define", "describe",
+            "apa itu", "siapa", "kapan", "dimana", "mengapa",
+            "jelaskan", "ceritakan", "bagaimana cara",
+        ]
+        for starter in knowledge_starters:
+            if msg.startswith(starter):
+                # Only if there's no URL, file path, or code indication
+                if not any(x in msg for x in ["http", "/", "\\", "```",
+                                                "file", "install", "run",
+                                                "create", "build", "write",
+                                                "buat", "tulis", "jalankan"]):
+                    return True
+
+        return False
+
+    def _respond_directly(self, user_message: str) -> None:
+        """Respond directly without Plan-Act flow for simple queries.
+
+        Uses the LLM to generate a direct response without tool calling.
+        This matches ai-manus behavior where the agent is smart about
+        not always creating a plan.
+        """
+        language = self._detect_language(user_message)
+
+        messages = [
+            {"role": "system", "content": (
+                "You are Dzeck, an AI assistant created by the Dzeck team. "
+                "Respond naturally and helpfully to the user's message. "
+                "Be concise but informative. "
+                "Respond in the same language as the user's message."
+            )},
+            {"role": "user", "content": user_message},
+        ]
+
+        try:
+            response_text = call_text_with_retry(messages, self.model)
+            if response_text:
+                emit_event("message", message=response_text[:4000],
+                           role="assistant")
+            else:
+                emit_event("message",
+                           message="I'm sorry, I couldn't generate a response.",
+                           role="assistant")
+        except Exception as e:
+            emit_event("error",
+                       error="Response error: {}".format(e))
+
     def run(self, user_message: str,
             attachments: Optional[List[str]] = None) -> None:
-        """Main agent flow: Plan -> Execute -> Update -> Summarize.
+        """Main agent flow: Smart routing + Plan -> Execute -> Update -> Summarize.
 
         Implements ai-manus PlanActFlow state machine:
         IDLE -> PLANNING -> EXECUTING -> UPDATING -> SUMMARIZING -> COMPLETED
+
+        Smart routing: Simple queries are handled directly without creating
+        a plan. Complex tasks go through the full Plan-Act flow.
         """
         try:
+            # Smart routing: detect if this is a simple query
+            if not attachments and self._is_simple_query(user_message):
+                self._respond_directly(user_message)
+                emit_event("done", success=True)
+                return
+
             # Phase 1: Planning
             self.state = FlowState.PLANNING
             emit_event("plan", status=PlanStatus.CREATING.value)
