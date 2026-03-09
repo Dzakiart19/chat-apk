@@ -22,6 +22,9 @@ COPY . .
 # Build the server
 RUN npm run server:build
 
+# Create static-build placeholder so COPY doesn't fail if Expo build wasn't run
+RUN mkdir -p /app/static-build
+
 # Stage 2: Production
 FROM node:22-slim
 
@@ -45,7 +48,7 @@ COPY --from=builder /app/server/templates ./server/templates
 COPY --from=builder /app/app.json ./app.json
 COPY --from=builder /app/assets ./assets
 
-# Copy static build if it exists (for production with pre-built Expo assets)
+# Copy static build (may be empty if Expo build wasn't run before Docker build)
 COPY --from=builder /app/static-build ./static-build
 
 ENV NODE_ENV=production
