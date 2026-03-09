@@ -4,18 +4,19 @@ Airforce Chat Handler for Dzeck AI
 Uses airforce API (OpenAI-compatible) for chat completions.
 Reads JSON from stdin, streams response as JSON lines to stdout.
 """
+import os
 import sys
 import json
+import time
 import urllib.request
+import urllib.error
 
 AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
-AIRFORCE_API_KEY = (
-    "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg"
-)
+AIRFORCE_API_KEY = os.environ.get("AIRFORCE_API_KEY", "")
 
 
-def stream_response(messages: list, model: str = "gpt-4o-mini") -> None:
-    """Stream response from airforce API."""
+def call_api(messages: list, model: str = "gpt-4o-mini") -> dict:
+    """Call Airforce API and return full response dict."""
     body = json.dumps({
         "model": model,
         "messages": messages,
@@ -35,7 +36,38 @@ def stream_response(messages: list, model: str = "gpt-4o-mini") -> None:
     )
 
     with urllib.request.urlopen(req, timeout=120) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def call_api_with_retry(messages: list, model: str = "gpt-4o-mini", max_retries: int = 5) -> dict:
+    """Call Airforce API with exponential backoff retry for rate limits."""
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return call_api(messages, model)
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code == 429 or e.code >= 500:
+                wait = 2 ** attempt
+                sys.stderr.write("[chat] HTTP {} error, retrying in {}s (attempt {}/{})\n".format(
+                    e.code, wait, attempt + 1, max_retries))
+                sys.stderr.flush()
+                time.sleep(wait)
+            else:
+                raise
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                time.sleep(wait)
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("API call failed after {} retries".format(max_retries))
+
+
+def stream_response(messages: list, model: str = "gpt-4o-mini") -> None:
+    """Call Airforce API and stream response as JSON lines."""
+    result = call_api_with_retry(messages, model)
 
     if "choices" in result and result["choices"]:
         content = result["choices"][0]["message"].get("content", "")
@@ -46,6 +78,11 @@ def stream_response(messages: list, model: str = "gpt-4o-mini") -> None:
 
 
 def main():
+    if not AIRFORCE_API_KEY:
+        sys.stdout.write(json.dumps({"error": "AIRFORCE_API_KEY environment variable is not set"}) + "\n")
+        sys.stdout.flush()
+        sys.exit(1)
+
     try:
         raw_input = sys.stdin.read()
         input_data = json.loads(raw_input)

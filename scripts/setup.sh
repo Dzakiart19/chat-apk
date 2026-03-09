@@ -179,19 +179,6 @@ install_pip_deps() {
 
 # ─── Verify Functions ───────────────────────────────────────────────
 
-verify_g4f() {
-  local python_cmd="$1"
-  if $python_cmd -c "from g4f.client import Client; from g4f.Provider import Yqcloud" 2>/dev/null; then
-    local g4f_version
-    g4f_version=$($python_cmd -m pip show g4f 2>/dev/null | grep "^Version:" | awk '{print $2}') || g4f_version="unknown"
-    print_success "g4f v${g4f_version} installed (Yqcloud provider available)"
-    return 0
-  else
-    print_error "g4f Python package not found or Yqcloud provider unavailable"
-    return 1
-  fi
-}
-
 verify_pydantic() {
   local python_cmd="$1"
   if $python_cmd -c "import pydantic; assert int(pydantic.VERSION.split('.')[0]) >= 2" 2>/dev/null; then

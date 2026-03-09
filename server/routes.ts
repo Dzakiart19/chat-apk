@@ -4,8 +4,11 @@ import { spawn } from "node:child_process";
 import * as https from "node:https";
 
 const AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions";
-const AIRFORCE_API_KEY =
-  "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg";
+const AIRFORCE_API_KEY = process.env.AIRFORCE_API_KEY || "";
+
+if (!AIRFORCE_API_KEY) {
+  console.warn("[WARNING] AIRFORCE_API_KEY is not set. AI features will not work.");
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check / status endpoint
@@ -142,6 +145,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const proc = spawn("python3", ["-m", "server.agent.agent_flow"], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: process.cwd(),
+      env: {
+        ...process.env,
+        AIRFORCE_API_KEY: AIRFORCE_API_KEY,
+      },
     });
 
     const input = JSON.stringify({

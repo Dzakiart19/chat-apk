@@ -12,6 +12,7 @@ This is the core autonomous agent implementing:
 
 Uses airforce API (OpenAI-compatible) for all LLM calls.
 """
+import os
 import re
 import sys
 import json
@@ -163,10 +164,12 @@ TOOLKIT_MAP: Dict[str, str] = {
 
 # -- Airforce API Configuration --
 AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
-AIRFORCE_API_KEY = (
-    "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg"
-)
+AIRFORCE_API_KEY = os.environ.get("AIRFORCE_API_KEY", "")
 DEFAULT_MODEL = "gpt-4o-mini"
+
+if not AIRFORCE_API_KEY:
+    sys.stderr.write("[agent] WARNING: AIRFORCE_API_KEY is not set!\n")
+    sys.stderr.flush()
 
 # -- OpenAI Function Calling Tool Schemas --
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
@@ -257,41 +260,63 @@ def call_airforce_text(
 def call_text_with_retry(
     messages: list,
     model: str = DEFAULT_MODEL,
-    max_retries: int = 3,
+    max_retries: int = 5,
     response_format: Optional[str] = None,
 ) -> str:
-    """Call airforce text API with retry + exponential backoff."""
+    """Call airforce text API with exponential backoff retry.
+
+    Specifically handles HTTP 429 (rate limit) and 5xx server errors.
+    """
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
             return call_airforce_text(messages, model, response_format)
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code == 429 or e.code >= 500:
+                wait = 2 ** attempt
+                emit_event("thinking", content="[Rate limited, retrying in {}s...]".format(wait))
+                time.sleep(wait)
+            else:
+                raise
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
-                time.sleep(1 * (attempt + 1))
+                time.sleep(2 ** attempt)
     if last_error is not None:
         raise last_error
-    raise RuntimeError("LLM call failed after retries")
+    raise RuntimeError("LLM call failed after {} retries".format(max_retries))
 
 
 def call_api_with_retry(
     messages: list,
     model: str = DEFAULT_MODEL,
     tools: Optional[List[Dict[str, Any]]] = None,
-    max_retries: int = 3,
+    max_retries: int = 5,
 ) -> Dict[str, Any]:
-    """Call airforce API (full response) with retry + exponential backoff."""
+    """Call airforce API (full response) with exponential backoff retry.
+
+    Specifically handles HTTP 429 (rate limit) and 5xx server errors.
+    """
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
             return call_airforce_api(messages, model, tools=tools)
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code == 429 or e.code >= 500:
+                wait = 2 ** attempt
+                emit_event("thinking", content="[Rate limited, retrying in {}s...]".format(wait))
+                time.sleep(wait)
+            else:
+                raise
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
-                time.sleep(1 * (attempt + 1))
+                time.sleep(2 ** attempt)
     if last_error is not None:
         raise last_error
-    raise RuntimeError("LLM call failed after retries")
+    raise RuntimeError("LLM call failed after {} retries".format(max_retries))
 
 
 def resolve_tool_name(name: str) -> Optional[str]:
