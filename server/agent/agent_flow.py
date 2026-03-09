@@ -12,6 +12,7 @@ This is the core autonomous agent implementing:
 
 Uses airforce API (OpenAI-compatible) for all LLM calls.
 """
+import re
 import sys
 import json
 import time
@@ -932,26 +933,35 @@ class DzeckAgent:
         to use tools vs. when to respond directly. Simple greetings,
         casual questions, and basic knowledge queries don't need the
         full Plan-Act flow.
+
+        Uses word-boundary matching via regex to avoid false positives
+        (e.g. "hai" should not match inside "chain").
         """
         msg = user_message.strip().lower()
-        # Short messages are often simple greetings or quick questions
-        word_count = len(msg.split())
+        words = msg.split()
+        word_count = len(words)
+
         if word_count <= 3:
-            # Check for greetings and simple phrases
+            # Check for greetings and simple phrases using word boundaries
             simple_patterns = [
-                "hi", "hello", "hey", "halo", "hai", "hei",
-                "thanks", "thank you", "terima kasih", "makasih",
-                "ok", "okay", "oke", "baik", "siap",
-                "yes", "no", "ya", "tidak",
-                "bye", "goodbye", "sampai jumpa",
-                "good morning", "good night", "selamat pagi",
-                "selamat malam", "selamat siang",
-                "who are you", "siapa kamu", "siapa anda",
-                "what can you do", "apa yang bisa",
-                "how are you", "apa kabar",
+                r"\bhi\b", r"\bhello\b", r"\bhey\b",
+                r"\bhalo\b", r"\bhai\b", r"\bhei\b",
+                r"\bthanks\b", r"\bthank you\b",
+                r"\bterima kasih\b", r"\bmakasih\b",
+                r"\bok\b", r"\bokay\b", r"\boke\b",
+                r"\bbaik\b", r"\bsiap\b",
+                r"\byes\b", r"\bno\b", r"\bya\b", r"\btidak\b",
+                r"\bbye\b", r"\bgoodbye\b", r"\bsampai jumpa\b",
+                r"\bgood morning\b", r"\bgood night\b",
+                r"\bselamat pagi\b", r"\bselamat malam\b",
+                r"\bselamat siang\b",
+                r"\bwho are you\b", r"\bsiapa kamu\b",
+                r"\bsiapa anda\b",
+                r"\bwhat can you do\b", r"\bapa yang bisa\b",
+                r"\bhow are you\b", r"\bapa kabar\b",
             ]
             for pattern in simple_patterns:
-                if pattern in msg:
+                if re.search(pattern, msg):
                     return True
 
         # Detect simple knowledge questions (no tool needed)
@@ -963,13 +973,17 @@ class DzeckAgent:
             "apa itu", "siapa", "kapan", "dimana", "mengapa",
             "jelaskan", "ceritakan", "bagaimana cara",
         ]
+        # Use word-boundary check for action keywords too
+        action_patterns = [
+            r"\bhttp", r"[/\\]", r"```",
+            r"\bfile\b", r"\binstall\b", r"\brun\b",
+            r"\bcreate\b", r"\bbuild\b", r"\bwrite\b",
+            r"\bbuat\b", r"\btulis\b", r"\bjalankan\b",
+        ]
         for starter in knowledge_starters:
             if msg.startswith(starter):
-                # Only if there's no URL, file path, or code indication
-                if not any(x in msg for x in ["http", "/", "\\", "```",
-                                                "file", "install", "run",
-                                                "create", "build", "write",
-                                                "buat", "tulis", "jalankan"]):
+                # Only if there's no URL, file path, or code/action indication
+                if not any(re.search(p, msg) for p in action_patterns):
                     return True
 
         return False
@@ -981,8 +995,6 @@ class DzeckAgent:
         This matches ai-manus behavior where the agent is smart about
         not always creating a plan.
         """
-        language = self._detect_language(user_message)
-
         messages = [
             {"role": "system", "content": (
                 "You are Dzeck, an AI assistant created by the Dzeck team. "
