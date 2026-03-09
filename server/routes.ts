@@ -124,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const input = JSON.stringify({
       message: message || "",
       messages: messages || [],
-      model: model || "gpt-4o-mini",
+      model: model || "mistral-small-24b",
       attachments: attachments || [],
     });
     proc.stdin.write(input);

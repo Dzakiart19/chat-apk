@@ -153,7 +153,7 @@ export async function* streamAgent(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
-      model: "gpt-4o-mini",
+      model: "mistral-small-24b",
       attachments: [],
     }),
     signal,

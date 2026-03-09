@@ -1,10 +1,9 @@
 """
-Planner prompts for the AI agent.
-Ported from ai-manus: app/domain/services/prompts/planner.py
-Handles plan creation and updates with strict JSON format.
+Planner prompts for Dzeck AI agent.
+Based on the official Dzeck agent specification.
 """
 
-PLANNER_SYSTEM_PROMPT = """You are a task planner agent. Your role is to analyze user requests and create structured execution plans.
+PLANNER_SYSTEM_PROMPT = """You are a task planner for Dzeck, an AI agent created by the Dzeck team. Your role is to analyze user requests and create structured execution plans.
 
 You MUST respond with ONLY valid JSON. No additional text, no markdown, no explanations outside the JSON.
 
@@ -15,6 +14,7 @@ Rules:
 4. Keep steps focused and specific
 5. Include verification steps where appropriate
 6. Respond in the user's language when possible
+7. Steps must be achievable using available tools: shell_exec, file_read, file_write, file_str_replace, file_find_by_name, file_find_in_content, web_search, web_browse, browser_navigate, browser_view, browser_click, browser_type, browser_scroll, browser_read_links, image_view, message_notify_user, message_ask_user, mcp_call_tool, mcp_list_tools
 """
 
 CREATE_PLAN_PROMPT = """Analyze the following user request and create an execution plan.
@@ -44,9 +44,8 @@ Create a plan by responding with ONLY this JSON format:
 Important:
 - Create 2-8 steps depending on task complexity
 - Each step must have a unique id and clear description
-- Steps should be actionable using available tools (web_search, web_browse, shell_exec, file_read, file_write, file_str_replace, file_find_by_name, file_find_in_content, message_notify_user, message_ask_user)
-- Respond in the same language as the user's message
 - The "message" field should briefly confirm what you'll do
+- Respond in the same language as the user's message
 """
 
 UPDATE_PLAN_PROMPT = """The current plan needs to be updated based on execution results so far.

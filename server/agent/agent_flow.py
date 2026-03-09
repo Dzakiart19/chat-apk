@@ -23,13 +23,20 @@ from typing import Optional, Dict, Any, List
 
 # Import tools
 from server.agent.tools.search import web_search, web_browse
-from server.agent.tools.shell import shell_exec
+from server.agent.tools.shell import (
+    shell_exec, shell_view, shell_wait,
+    shell_write_to_process, shell_kill_process,
+)
 from server.agent.tools.file import (
     file_read, file_write, file_str_replace,
     file_find_by_name, file_find_in_content,
 )
 from server.agent.tools.message import message_notify_user, message_ask_user
-from server.agent.tools.browser import browser_navigate, browser_view, browser_restart
+from server.agent.tools.browser import (
+    browser_navigate, browser_view, browser_click, browser_type,
+    browser_scroll, browser_scroll_to_bottom, browser_read_links,
+    browser_console_view, browser_restart, browser_save_image,
+)
 from server.agent.tools.mcp import mcp_call_tool, mcp_list_tools
 
 # Import models
@@ -69,21 +76,38 @@ class FlowState(str, Enum):
     FAILED = "failed"
 
 
-# Tool registry - all tools matching ai-manus architecture
+# Tool registry - full Dzeck agent tool set
 TOOLS: Dict[str, Any] = {
-    "web_search": web_search,
-    "web_browse": web_browse,
+    # Messaging
+    "message_notify_user": message_notify_user,
+    "message_ask_user": message_ask_user,
+    # Shell
     "shell_exec": shell_exec,
+    "shell_view": shell_view,
+    "shell_wait": shell_wait,
+    "shell_write_to_process": shell_write_to_process,
+    "shell_kill_process": shell_kill_process,
+    # File
     "file_read": file_read,
     "file_write": file_write,
     "file_str_replace": file_str_replace,
     "file_find_by_name": file_find_by_name,
     "file_find_in_content": file_find_in_content,
-    "message_notify_user": message_notify_user,
-    "message_ask_user": message_ask_user,
+    # Browser
     "browser_navigate": browser_navigate,
     "browser_view": browser_view,
+    "browser_click": browser_click,
+    "browser_type": browser_type,
+    "browser_scroll": browser_scroll,
+    "browser_scroll_to_bottom": browser_scroll_to_bottom,
+    "browser_read_links": browser_read_links,
+    "browser_console_view": browser_console_view,
     "browser_restart": browser_restart,
+    "browser_save_image": browser_save_image,
+    # Search / Web
+    "web_search": web_search,
+    "web_browse": web_browse,
+    # MCP
     "mcp_call_tool": mcp_call_tool,
     "mcp_list_tools": mcp_list_tools,
 }
@@ -93,6 +117,9 @@ TOOL_ALIASES: Dict[str, str] = {
     "message_notify": "message_notify_user",
     "message_ask": "message_ask_user",
     "file_find": "file_find_by_name",
+    "browser_open": "browser_navigate",
+    "browse": "web_browse",
+    "search": "web_search",
 }
 
 
@@ -103,7 +130,7 @@ def emit_event(event_type: str, **data: Any) -> None:
     sys.stdout.flush()
 
 
-def call_llm(messages: list, model: str = "gpt-4o-mini",
+def call_llm(messages: list, model: str = "mistral-small-24b",
              response_format: Optional[str] = None) -> str:
     """Call the LLM using g4f or OpenAI-compatible API."""
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -116,12 +143,12 @@ def call_llm(messages: list, model: str = "gpt-4o-mini",
         return _call_g4f(messages, model)
 
 
-def _call_g4f(messages: list, model: str = "gpt-4o-mini") -> str:
-    """Call LLM using g4f (gpt4free) with Yqcloud provider (free, no API key)."""
+def _call_g4f(messages: list, model: str = "") -> str:
+    """Call LLM using g4f (gpt4free) with PollinationsAI provider (free, no API key)."""
     from g4f.client import Client
-    from g4f.Provider import Yqcloud
+    from g4f.Provider import PollinationsAI
 
-    client = Client(provider=Yqcloud)
+    client = Client(provider=PollinationsAI)
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -171,7 +198,7 @@ def _call_openai_api(messages: list, model: str, api_key: str,
     return ""
 
 
-def call_llm_with_retry(messages: list, model: str = "gpt-4o-mini",
+def call_llm_with_retry(messages: list, model: str = "mistral-small-24b",
                          max_retries: int = 3,
                          response_format: Optional[str] = None) -> str:
     """Call LLM with retry logic and exponential backoff."""
@@ -237,8 +264,10 @@ def build_tool_content(
     """Build tool-specific content for frontend display."""
     data = tool_result.data or {}
 
-    if tool_name == "shell_exec":
-        console = data.get("stdout", "")
+    # Shell tools
+    if tool_name in ("shell_exec", "shell_view", "shell_wait",
+                      "shell_write_to_process", "shell_kill_process"):
+        console = data.get("stdout", "") or data.get("output", "")
         if data.get("stderr"):
             console += "\n" + data["stderr"]
         return {
@@ -246,20 +275,33 @@ def build_tool_content(
             "command": data.get("command", ""),
             "console": console,
             "return_code": data.get("return_code", 0),
+            "id": data.get("id", ""),
         }
+
+    # Search
     elif tool_name == "web_search":
         return {
             "type": "search",
             "query": data.get("query", ""),
             "results": data.get("results", []),
         }
-    elif tool_name in ("web_browse", "browser_navigate", "browser_view"):
+
+    # Browser tools
+    elif tool_name in ("web_browse", "browser_navigate", "browser_view",
+                        "browser_click", "browser_type", "browser_scroll",
+                        "browser_scroll_to_bottom", "browser_read_links",
+                        "browser_console_view", "browser_save_image",
+                        "browser_restart"):
         return {
             "type": "browser",
             "url": data.get("url", ""),
             "title": data.get("title", ""),
-            "content": str(data.get("content", ""))[:2000],
+            "content": str(data.get("content", data.get("content_snippet", "")))[:2000],
+            "links": data.get("links", [])[:10],
+            "save_path": data.get("save_path", ""),
         }
+
+    # File tools
     elif tool_name in ("file_read", "file_write", "file_str_replace",
                         "file_find_by_name", "file_find_in_content"):
         return {
@@ -268,12 +310,15 @@ def build_tool_content(
             "content": str(data.get("content", ""))[:2000],
             "operation": tool_name.replace("file_", ""),
         }
+
+    # MCP tools
     elif tool_name in ("mcp_call_tool", "mcp_list_tools"):
         return {
             "type": "mcp",
             "tool": data.get("tool_name", ""),
             "result": str(data)[:2000],
         }
+
     return None
 
 
@@ -289,7 +334,7 @@ class DzeckAgent:
     - Event streaming
     """
 
-    def __init__(self, model: str = "gpt-4o-mini"):
+    def __init__(self, model: str = "mistral-small-24b"):
         self.model = model
         self.memory = Memory()
         self.max_tool_iterations = 20
@@ -785,7 +830,7 @@ def main() -> None:
         input_data = json.loads(raw_input)
 
         user_message = input_data.get("message", "")
-        model = input_data.get("model", "gpt-4o-mini")
+        model = input_data.get("model", "mistral-small-24b")
         messages = input_data.get("messages", [])
         attachments = input_data.get("attachments", [])
 
