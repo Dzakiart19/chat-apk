@@ -2,7 +2,6 @@
 Web search and browsing tools for the AI agent.
 Uses DuckDuckGo (free, no API key required) and requests for browsing.
 """
-import json
 import re
 import urllib.request
 import urllib.parse
