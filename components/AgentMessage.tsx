@@ -116,7 +116,7 @@ export function AgentMessage({ event }: AgentMessageProps) {
 
 function StepStatusBadge({ status }: { status: string }) {
   switch (status) {
-    case "started":
+    case "running":
       return (
         <View style={[styles.badge, styles.badgeRunning]}>
           <Ionicons name="play" size={10} color="#6C5CE7" />
