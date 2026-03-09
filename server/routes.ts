@@ -41,6 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proc.stdin.end();
 
     let buffer = "";
+    let doneSent = false;
 
     proc.stdout.on("data", (data: Buffer) => {
       buffer += data.toString();
@@ -52,6 +53,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const parsed = JSON.parse(line);
             if (parsed.done) {
+              doneSent = true;
               res.write("data: [DONE]\n\n");
             } else if (parsed.error) {
               res.write(
@@ -75,7 +77,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     proc.on("close", () => {
       if (!res.writableEnded) {
-        res.write("data: [DONE]\n\n");
+        if (!doneSent) {
+          res.write("data: [DONE]\n\n");
+        }
         res.end();
       }
     });
@@ -89,8 +93,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    req.on("close", () => {
-      proc.kill();
+    res.on("close", () => {
+      if (!proc.killed) {
+        proc.kill();
+      }
     });
   });
 
