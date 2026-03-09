@@ -239,7 +239,7 @@ export default function ChatScreen() {
             event.type === "error" ||
             (event.type === "plan" && event.status === "created") ||
             (event.type === "step" &&
-              (event.status === "started" || event.status === "completed"));
+              (event.status === "running" || event.status === "completed"));
 
           if (shouldShow) {
             setAgentEvents((prev) => [
