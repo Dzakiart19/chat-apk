@@ -355,10 +355,10 @@ Execute now. Choose ONE tool to start with."""
                 return
 
         # Max iterations reached
-        step.status = ExecutionStatus.COMPLETED
-        step.success = True
-        step.result = "Step completed (max iterations reached)"
-        emit_event("step", status="completed", step=step.to_dict())
+        step.status = ExecutionStatus.FAILED
+        step.success = False
+        step.result = "Step incomplete (max iterations reached)"
+        emit_event("step", status="failed", step=step.to_dict())
 
     def update_plan(self, plan: Plan, completed_step: Step) -> None:
         """Update the plan based on the completed step result."""
