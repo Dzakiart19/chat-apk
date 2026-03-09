@@ -938,11 +938,12 @@ class DzeckAgent:
         (e.g. "hai" should not match inside "chain").
         """
         msg = user_message.strip().lower()
-        words = msg.split()
-        word_count = len(words)
+        word_count = len(msg.split())
 
-        if word_count <= 3:
-            # Check for greetings and simple phrases using word boundaries
+        if word_count <= 4:
+            # Check for greetings and simple phrases using word boundaries.
+            # Gate uses <=4 to allow multi-word patterns like
+            # "what can you do" (4 words) and "apa yang bisa" (3 words).
             simple_patterns = [
                 r"\bhi\b", r"\bhello\b", r"\bhey\b",
                 r"\bhalo\b", r"\bhai\b", r"\bhei\b",
