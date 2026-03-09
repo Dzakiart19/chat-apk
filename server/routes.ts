@@ -115,12 +115,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    const agentScript = path.resolve(
-      process.cwd(),
-      "server",
-      "agent",
-      "agent_flow.py",
-    );
     const proc = spawn("python3", ["-m", "server.agent.agent_flow"], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: process.cwd(),
