@@ -18,6 +18,7 @@ import json
 import time
 import traceback
 import urllib.request
+import urllib.error
 from enum import Enum
 from typing import Optional, Dict, Any, List
 
