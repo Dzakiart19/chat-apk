@@ -191,6 +191,46 @@ export default function ChatScreen() {
             });
           }
 
+          // Tool events: merge calling -> called by tool_call_id (ai-manus style)
+          // Show "calling" events immediately (with spinner), then update to "called" with result
+          if (event.type === "tool") {
+            const toolCallId = event.tool_call_id;
+
+            if (event.status === "calling") {
+              // Add new tool card in "calling" state (shows spinner)
+              setAgentEvents((prev) => [
+                ...prev,
+                { kind: "agent", data: event, id: eventId },
+              ]);
+            } else if (event.status === "called" || event.status === "error") {
+              // Merge with existing "calling" event by tool_call_id
+              setAgentEvents((prev) => {
+                const existingIdx = prev.findIndex(
+                  (item) =>
+                    item.kind === "agent" &&
+                    item.data.type === "tool" &&
+                    item.data.tool_call_id === toolCallId &&
+                    item.data.status === "calling",
+                );
+                if (existingIdx >= 0) {
+                  // Update existing calling event to called/error
+                  const updated = [...prev];
+                  updated[existingIdx] = {
+                    ...updated[existingIdx],
+                    data: event,
+                  };
+                  return updated;
+                }
+                // No matching calling event found, add as new
+                return [
+                  ...prev,
+                  { kind: "agent", data: event, id: eventId },
+                ];
+              });
+            }
+            continue;
+          }
+
           // Filter out redundant events for cleaner UI
           const shouldShow =
             event.type === "message" ||
@@ -199,8 +239,7 @@ export default function ChatScreen() {
             event.type === "error" ||
             (event.type === "plan" && event.status === "created") ||
             (event.type === "step" &&
-              (event.status === "started" || event.status === "completed")) ||
-            (event.type === "tool" && event.status === "called");
+              (event.status === "started" || event.status === "completed"));
 
           if (shouldShow) {
             setAgentEvents((prev) => [

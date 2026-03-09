@@ -31,7 +31,7 @@ class StepStatus(str, Enum):
 
 class ToolStatus(str, Enum):
     CALLING = "calling"
-    RESULT = "result"
+    CALLED = "called"
     ERROR = "error"
 
 
