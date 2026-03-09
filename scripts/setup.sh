@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
 # Dzeck AI - Auto Setup & Install Dependencies
-# Installs Node.js (npm) and Python (pip) dependencies in parallel
-# for faster setup time.
+# Installs Node.js (npm) dependencies and verifies Python (pip) packages.
+#
+# Note: On Replit/NixOS, Python packages are managed via Replit's package
+# manager. This script verifies they are installed and installs them if needed.
 #
 # Usage:
 #   ./scripts/setup.sh          # Install all dependencies
@@ -130,11 +132,9 @@ install_npm_deps() {
   fi
 
   if [ -f "$PROJECT_ROOT/package-lock.json" ]; then
-    print_step "Installing Node.js dependencies (npm ci)..."
     cd "$PROJECT_ROOT"
     npm ci --loglevel=warn > "$NPM_LOG" 2>&1
   else
-    print_step "Installing Node.js dependencies (npm install)..."
     cd "$PROJECT_ROOT"
     npm install --loglevel=warn > "$NPM_LOG" 2>&1
   fi
@@ -142,16 +142,92 @@ install_npm_deps() {
 
 install_pip_deps() {
   local python_cmd="$1"
-  local clean_install="$2"
 
   if [ ! -f "$PROJECT_ROOT/requirements.txt" ]; then
     print_warning "No requirements.txt found, skipping Python dependencies"
     return 0
   fi
 
-  print_step "Installing Python dependencies (pip install)..."
   cd "$PROJECT_ROOT"
-  $python_cmd -m pip install -r requirements.txt --quiet > "$PIP_LOG" 2>&1
+
+  # Try standard pip install first
+  if $python_cmd -m pip install -r requirements.txt --quiet > "$PIP_LOG" 2>&1; then
+    return 0
+  fi
+
+  # On Replit/NixOS the Nix store is immutable - try with --break-system-packages
+  # or --user as fallbacks
+  if $python_cmd -m pip install -r requirements.txt \
+      --quiet --break-system-packages >> "$PIP_LOG" 2>&1; then
+    return 0
+  fi
+
+  if $python_cmd -m pip install -r requirements.txt \
+      --quiet --user >> "$PIP_LOG" 2>&1; then
+    return 0
+  fi
+
+  # All pip methods failed - check if packages are already available
+  # (on Replit they're installed via Nix/packager, not pip directly)
+  if $python_cmd -c "import g4f, pydantic, aiohttp, requests" 2>/dev/null; then
+    echo "Packages already available (installed via system packager)" >> "$PIP_LOG"
+    return 0
+  fi
+
+  return 1
+}
+
+# ─── Verify Functions ───────────────────────────────────────────────
+
+verify_g4f() {
+  local python_cmd="$1"
+  if $python_cmd -c "from g4f.client import Client; from g4f.Provider import Yqcloud" 2>/dev/null; then
+    local g4f_version
+    g4f_version=$($python_cmd -m pip show g4f 2>/dev/null | grep "^Version:" | awk '{print $2}') || g4f_version="unknown"
+    print_success "g4f v${g4f_version} installed (Yqcloud provider available)"
+    return 0
+  else
+    print_error "g4f Python package not found or Yqcloud provider unavailable"
+    return 1
+  fi
+}
+
+verify_pydantic() {
+  local python_cmd="$1"
+  if $python_cmd -c "import pydantic; assert int(pydantic.VERSION.split('.')[0]) >= 2" 2>/dev/null; then
+    local ver
+    ver=$($python_cmd -c "import pydantic; print(pydantic.VERSION)" 2>/dev/null) || ver="unknown"
+    print_success "pydantic v${ver} installed (v2+ required for agent models)"
+    return 0
+  else
+    print_error "pydantic v2+ not found (required for agent data models)"
+    return 1
+  fi
+}
+
+verify_aiohttp() {
+  local python_cmd="$1"
+  if $python_cmd -c "import aiohttp" 2>/dev/null; then
+    local ver
+    ver=$($python_cmd -m pip show aiohttp 2>/dev/null | grep "^Version:" | awk '{print $2}') || ver="unknown"
+    print_success "aiohttp v${ver} installed (required by g4f)"
+    return 0
+  else
+    print_warning "aiohttp not found (g4f may have limited functionality)"
+    return 1
+  fi
+}
+
+verify_tsx() {
+  if npx tsx --version &> /dev/null 2>&1; then
+    local ver
+    ver=$(npx tsx --version 2>/dev/null | head -1) || ver="unknown"
+    print_success "tsx ${ver} available (TypeScript runner for backend)"
+    return 0
+  else
+    print_error "tsx not found (required to run the backend server)"
+    return 1
+  fi
 }
 
 # ─── Main ───────────────────────────────────────────────────────────
@@ -191,7 +267,7 @@ main() {
   check_node || prereq_ok=false
   check_npm || prereq_ok=false
 
-  local python_cmd
+  local python_cmd=""
   python_cmd=$(detect_python) || true
 
   if [ -z "$python_cmd" ]; then
@@ -199,7 +275,8 @@ main() {
     echo "  Install it from: https://python.org/"
     prereq_ok=false
   else
-    local py_version=$($python_cmd --version 2>&1)
+    local py_version
+    py_version=$($python_cmd --version 2>&1)
     print_success "$py_version found"
   fi
 
@@ -231,7 +308,7 @@ main() {
   npm_pid=$!
 
   # Start pip install in background
-  (install_pip_deps "$python_cmd" "$clean_install") &
+  (install_pip_deps "$python_cmd") &
   pip_pid=$!
 
   # Wait for npm
@@ -251,13 +328,12 @@ main() {
     echo -e "\r  ${GREEN}pip${NC}:    done!              "
   else
     pip_status=1
-    echo -e "\r  ${RED}pip${NC}:    FAILED             "
+    echo -e "\r  ${YELLOW}pip${NC}:    skipped (system-managed)  "
   fi
 
   echo ""
 
-  # ─── Step 3: Report results ───────────────────────────────────
-  local total_time=$(elapsed_time)
+  # ─── Step 3: Report npm errors only (pip may be system-managed) ──
   local has_errors=false
 
   if [ "$npm_status" -ne 0 ]; then
@@ -270,17 +346,14 @@ main() {
   fi
 
   if [ "$pip_status" -ne 0 ]; then
-    has_errors=true
-    print_error "pip install failed! Check log: $PIP_LOG"
-    echo ""
-    echo -e "${RED}Last 10 lines of pip log:${NC}"
-    tail -10 "$PIP_LOG" 2>/dev/null || true
+    print_warning "pip install could not run directly (may be system-managed on Replit/NixOS)"
+    echo -e "  Verifying Python packages are available via system packager..."
     echo ""
   fi
 
   if [ "$has_errors" = "true" ]; then
     echo ""
-    print_error "Setup completed with errors in $total_time"
+    print_error "Setup completed with errors in $(elapsed_time)"
     exit 1
   fi
 
@@ -289,40 +362,52 @@ main() {
 
   local verify_ok=true
 
-  # Check node_modules
+  # Check node_modules exists
   if [ -d "$PROJECT_ROOT/node_modules" ]; then
-    local npm_pkg_count=$(ls -1 "$PROJECT_ROOT/node_modules" | wc -l)
+    local npm_pkg_count
+    npm_pkg_count=$(ls -1 "$PROJECT_ROOT/node_modules" | wc -l)
     print_success "node_modules: $npm_pkg_count packages installed"
   else
     print_error "node_modules directory not found"
     verify_ok=false
   fi
 
-  # Check g4f
-  if $python_cmd -c "import g4f" 2>/dev/null; then
-    local g4f_version=$($python_cmd -c "import g4f; print(g4f.__version__)" 2>/dev/null || echo "unknown")
-    print_success "g4f v$g4f_version installed"
-  else
-    print_error "g4f Python package not found"
-    verify_ok=false
-  fi
+  # Check tsx (TypeScript runner for backend)
+  verify_tsx || verify_ok=false
+
+  # Check g4f with Yqcloud provider (free AI, no API key required)
+  verify_g4f "$python_cmd" || verify_ok=false
+
+  # Check pydantic v2 (required for agent data models)
+  verify_pydantic "$python_cmd" || verify_ok=false
+
+  # Check aiohttp (used by g4f internally) - warning only
+  verify_aiohttp "$python_cmd" || true
 
   echo ""
 
   if [ "$verify_ok" = "false" ]; then
     print_error "Verification failed. Some dependencies may be missing."
+    echo ""
+    echo -e "  ${YELLOW}On Replit/NixOS, install Python packages via the Replit Packager${NC}"
+    echo -e "  or run: ${CYAN}pip install --break-system-packages g4f pydantic aiohttp requests${NC}"
     exit 1
   fi
 
   # ─── Done! ────────────────────────────────────────────────────
+  local total_time=$(elapsed_time)
   echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════╗${NC}"
-  echo -e "${GREEN}${BOLD}║         Setup completed in $total_time!         ${NC}"
+  echo -e "${GREEN}${BOLD}║       Setup completed in ${total_time}!          ${NC}"
   echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════╝${NC}"
   echo ""
   echo -e "  ${BOLD}Quick Start:${NC}"
-  echo -e "    ${CYAN}npm run server:dev${NC}        Start the backend server"
-  echo -e "    ${CYAN}npx expo start --web${NC}     Start the Expo web app"
-  echo -e "    ${CYAN}npx expo start${NC}           Start Expo (all platforms)"
+  echo -e "    ${CYAN}npm run server:dev${NC}                    Start backend server (port 5000)"
+  echo -e "    ${CYAN}npx --yes expo start --localhost${NC}      Start Expo dev server"
+  echo ""
+  echo -e "  ${BOLD}AI Configuration:${NC}"
+  echo -e "    Uses ${CYAN}gpt4free (g4f)${NC} by default - no API key required"
+  echo -e "    Provider: ${CYAN}Yqcloud${NC} | Models: mistral-small-24b, gpt-4o-mini"
+  echo -e "    To use OpenAI API: set ${CYAN}OPENAI_API_KEY${NC} environment variable"
   echo ""
 }
 

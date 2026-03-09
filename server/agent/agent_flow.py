@@ -117,10 +117,11 @@ def call_llm(messages: list, model: str = "gpt-4o-mini",
 
 
 def _call_g4f(messages: list, model: str = "gpt-4o-mini") -> str:
-    """Call LLM using g4f (gpt4free)."""
+    """Call LLM using g4f (gpt4free) with Yqcloud provider (free, no API key)."""
     from g4f.client import Client
+    from g4f.Provider import Yqcloud
 
-    client = Client()
+    client = Client(provider=Yqcloud)
     response = client.chat.completions.create(
         model=model,
         messages=messages,
