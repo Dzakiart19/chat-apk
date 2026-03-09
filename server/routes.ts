@@ -4,6 +4,15 @@ import { spawn } from "node:child_process";
 import * as path from "node:path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check / status endpoint
+  app.get("/status", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/status", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Chat API endpoint with SSE streaming
   app.post("/api/chat", (req, res) => {
     const { messages, model } = req.body;

@@ -26,7 +26,8 @@ const SYSTEM_PROMPT = {
 function getApiUrl(): string {
   const host = process.env.EXPO_PUBLIC_DOMAIN;
   if (host) return `https://${host}/`;
-  return "http://localhost:5000/";
+  const port = process.env.EXPO_PUBLIC_API_PORT || "5000";
+  return `http://localhost:${port}/`;
 }
 
 export default function ChatScreen() {

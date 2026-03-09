@@ -33,7 +33,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://dzeck-ai.app/"
         }
       ],
       "expo-font",
