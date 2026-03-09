@@ -3,6 +3,7 @@
 g4f Chat Handler for Dzeck AI
 Uses gpt4free library with mistral-small-24b model.
 Reads JSON from stdin, streams response as JSON lines to stdout.
+Uses Yqcloud provider (free, no API key required).
 """
 import sys
 import json
@@ -11,13 +12,14 @@ import json
 def main():
     try:
         from g4f.client import Client
+        from g4f.Provider import Yqcloud
 
         raw_input = sys.stdin.read()
         input_data = json.loads(raw_input)
         messages = input_data.get("messages", [])
-        model = input_data.get("model", "mistral-small-24b")
+        model = input_data.get("model", "")
 
-        client = Client()
+        client = Client(provider=Yqcloud)
         response = client.chat.completions.create(
             model=model,
             messages=messages,

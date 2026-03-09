@@ -19,7 +19,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    const pythonScript = path.resolve(__dirname, "..", "server", "g4f_chat.py");
+    const pythonScript = path.resolve(process.cwd(), "server", "g4f_chat.py");
     const proc = spawn("python3", [pythonScript], {
       stdio: ["pipe", "pipe", "pipe"],
     });
