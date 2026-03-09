@@ -1,23 +1,30 @@
 """
 Web search and browsing tools for the AI agent.
+Ported from ai-manus: app/domain/services/tools/search.py
 Uses DuckDuckGo (free, no API key required) and requests for browsing.
 """
 import re
+import json
 import urllib.request
 import urllib.parse
 import urllib.error
 import ssl
+from typing import Optional
+
+from server.agent.models.tool_result import ToolResult
 
 
-def web_search(query: str, num_results: int = 5) -> dict:
+def web_search(query: str, num_results: int = 5) -> ToolResult:
     """Search the web using DuckDuckGo HTML search (no API key needed).
+
+    Matching ai-manus info_search_web tool interface.
 
     Args:
         query: Search query string
         num_results: Max results to return (default 5)
 
     Returns:
-        dict with success status and results list
+        ToolResult with search results
     """
     try:
         encoded_query = urllib.parse.quote_plus(query)
@@ -47,7 +54,6 @@ def web_search(query: str, num_results: int = 5) -> dict:
             if len(results) >= num_results:
                 break
             link = match.group(1)
-            # DuckDuckGo wraps links in a redirect
             if "uddg=" in link:
                 link_match = re.search(r"uddg=([^&]+)", link)
                 if link_match:
@@ -60,7 +66,6 @@ def web_search(query: str, num_results: int = 5) -> dict:
                 )
 
         if not results:
-            # Fallback: try a simpler pattern
             link_pattern = re.compile(
                 r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
                 re.DOTALL,
@@ -79,25 +84,31 @@ def web_search(query: str, num_results: int = 5) -> dict:
                         {"title": title, "url": link, "snippet": ""}
                     )
 
-        return {
-            "success": True,
-            "results": results,
-            "query": query,
-            "count": len(results),
-        }
+        result_text = json.dumps(results, indent=2, ensure_ascii=False)
+        return ToolResult(
+            success=True,
+            message=f"Found {len(results)} results for '{query}':\n{result_text}",
+            data={"results": results, "query": query, "count": len(results)},
+        )
 
     except Exception as e:
-        return {"success": False, "error": str(e), "results": [], "query": query}
+        return ToolResult(
+            success=False,
+            message=f"Search failed: {str(e)}",
+            data={"error": str(e), "query": query},
+        )
 
 
-def web_browse(url: str) -> dict:
+def web_browse(url: str) -> ToolResult:
     """Browse a web page and extract its text content.
+
+    Matching ai-manus browser_navigate/browser_view interface.
 
     Args:
         url: Full URL to browse
 
     Returns:
-        dict with success status and page content
+        ToolResult with page content
     """
     try:
         ctx = ssl.create_default_context()
@@ -113,12 +124,11 @@ def web_browse(url: str) -> dict:
         with urllib.request.urlopen(req, context=ctx, timeout=20) as response:
             content_type = response.headers.get("Content-Type", "")
             if "text" not in content_type and "html" not in content_type:
-                return {
-                    "success": True,
-                    "url": url,
-                    "content": f"[Binary content: {content_type}]",
-                    "title": "",
-                }
+                return ToolResult(
+                    success=True,
+                    message=f"[Binary content: {content_type}]",
+                    data={"url": url, "content": f"[Binary content: {content_type}]", "title": ""},
+                )
 
             html = response.read().decode("utf-8", errors="replace")
 
@@ -151,13 +161,15 @@ def web_browse(url: str) -> dict:
         if len(text) > max_chars:
             text = text[:max_chars] + "\n\n[Content truncated...]"
 
-        return {
-            "success": True,
-            "url": url,
-            "title": title,
-            "content": text,
-            "length": len(text),
-        }
+        return ToolResult(
+            success=True,
+            message=f"Page: {title}\nURL: {url}\n\n{text}",
+            data={"url": url, "title": title, "content": text, "length": len(text)},
+        )
 
     except Exception as e:
-        return {"success": False, "error": str(e), "url": url, "content": ""}
+        return ToolResult(
+            success=False,
+            message=f"Failed to browse {url}: {str(e)}",
+            data={"error": str(e), "url": url},
+        )

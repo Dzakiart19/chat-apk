@@ -78,11 +78,19 @@ export interface AgentPlan {
 }
 
 export interface ToolContent {
-  type: "shell" | "search" | "browser" | "file";
+  type: "shell" | "search" | "browser" | "file" | "mcp";
   console?: string;
+  command?: string;
+  return_code?: number;
   results?: Array<{ title: string; url: string; snippet: string }>;
+  query?: string;
   title?: string;
   content?: string;
+  url?: string;
+  file?: string;
+  operation?: string;
+  tool?: string;
+  result?: string;
 }
 
 export type AgentEventType =
@@ -93,7 +101,8 @@ export type AgentEventType =
   | "error"
   | "done"
   | "title"
-  | "thinking";
+  | "thinking"
+  | "wait";
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -120,6 +129,14 @@ export interface AgentEvent {
   title?: string;
   // Thinking events
   thinking?: string;
+  content?: string;
+  // Wait events
+  prompt?: string;
+  // Done events
+  success?: boolean;
+  // Additional details
+  details?: string;
+  attachments?: string[];
 }
 
 /**
@@ -134,7 +151,11 @@ export async function* streamAgent(
   const response = await fetch(`${apiUrl}api/agent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, model: "gpt-4o-mini" }),
+    body: JSON.stringify({
+      message,
+      model: "gpt-4o-mini",
+      attachments: [],
+    }),
     signal,
   });
 

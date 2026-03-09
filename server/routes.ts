@@ -101,8 +101,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Agent API endpoint with SSE streaming - Full autonomous AI agent mode
+  // Ported from ai-manus PlanActFlow architecture
   app.post("/api/agent", (req, res) => {
-    const { message, messages, model } = req.body;
+    const { message, messages, model, attachments } = req.body;
 
     if (!message && (!messages || !Array.isArray(messages))) {
       res.status(400).json({ error: "message or messages array is required" });
@@ -124,6 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: message || "",
       messages: messages || [],
       model: model || "gpt-4o-mini",
+      attachments: attachments || [],
     });
     proc.stdin.write(input);
     proc.stdin.end();
