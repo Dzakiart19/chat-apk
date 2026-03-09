@@ -45,7 +45,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [agentEvents, setAgentEvents] = useState<ChatListItem[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isAgentMode, setIsAgentMode] = useState(true);
+  const [isAgentMode, setIsAgentMode] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<AgentPlan | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
