@@ -1,7 +1,7 @@
 import { fetch } from "expo/fetch";
 
 /**
- * Stream chat responses from the g4f API via SSE.
+ * Stream chat responses from the airforce API via SSE.
  * Yields text chunks as they arrive.
  */
 export async function* streamChat(
@@ -12,7 +12,7 @@ export async function* streamChat(
   const response = await fetch(`${apiUrl}api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, model: "mistral-small-24b" }),
+    body: JSON.stringify({ messages, model: "gpt-4o-mini" }),
     signal,
   });
 
@@ -153,7 +153,7 @@ export async function* streamAgent(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
-      model: "mistral-small-24b",
+      model: "gpt-4o-mini",
       attachments: [],
     }),
     signal,

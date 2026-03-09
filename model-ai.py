@@ -2,14 +2,41 @@ import json
 import re
 import time
 import uuid
+import urllib.request
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
-from g4f.client import Client
 
 app = Flask(__name__)
 CORS(app)
 
-client = Client()
+AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
+AIRFORCE_API_KEY = (
+    "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg"
+)
+
+
+def airforce_chat(messages, model="gpt-4o-mini", stream=False):
+    """Call airforce API for chat completions."""
+    body = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "stream": stream,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        AIRFORCE_API_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {}".format(AIRFORCE_API_KEY),
+        },
+        method="POST",
+    )
+
+    resp = urllib.request.urlopen(req, timeout=120)
+    return json.loads(resp.read().decode("utf-8"))
 
 WORKING_MODELS = {
     "gpt-4o-mini":        {"status": "responsive", "avg_ms": 2900, "note": "OpenAI-compatible via free proxy"},
@@ -59,7 +86,7 @@ def clean_response(text: str) -> str:
 def index():
     return jsonify({
         "status": "ok",
-        "message": "G4F Free AI API — No API Key Needed",
+        "message": "Dzeck AI API — Powered by Airforce",
         "recommended_models": list(WORKING_MODELS.keys()),
         "total_models": len(ALL_MODELS),
         "endpoints": {
@@ -69,7 +96,7 @@ def index():
             "test_model": "GET  /v1/models/test?model=mistral-small-24b",
             "health":     "GET  /health"
         },
-        "rate_limit": "Tidak ada rate limit dari server ini. Namun provider gratis g4f bisa slow/down sewaktu-waktu."
+        "rate_limit": "Rate limit tergantung provider airforce API."
     })
 
 
@@ -90,7 +117,7 @@ def list_models():
             "id": model,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": "g4f-free",
+            "owned_by": "airforce",
             "permission": [],
             "root": model,
             "parent": None
@@ -105,25 +132,26 @@ def models_info():
     return jsonify({
         "tested_and_working": WORKING_MODELS,
         "all_available": ALL_MODELS,
-        "note": "Model di luar 'tested_and_working' mungkin timeout atau butuh API key tergantung provider yang dipilih g4f",
+        "note": "Model di luar 'tested_and_working' mungkin timeout tergantung kondisi API",
         "streaming_support": "Semua model mendukung streaming (stream: true)",
         "rate_limit": {
             "server": "Tidak ada",
-            "provider": "Tergantung provider gratis g4f — bisa slow saat traffic tinggi, tidak ada limit resmi"
+            "provider": "Tergantung provider airforce API"
         }
     })
 
 
 @app.route("/v1/models/test", methods=["GET"])
 def test_model():
-    model = request.args.get("model", "mistral-small-24b")
+    model = request.args.get("model", "gpt-4o-mini")
     start = time.time()
     try:
-        response = client.chat.completions.create(
+        response = airforce_chat(
+            [{"role": "user", "content": "Reply with exactly: OK"}],
             model=model,
-            messages=[{"role": "user", "content": "Reply with exactly: OK"}],
         )
-        content = clean_response(response.choices[0].message.content if response.choices else "")
+        raw = response.get("choices", [{}])[0].get("message", {}).get("content", "") if response.get("choices") else ""
+        content = clean_response(raw)
         elapsed = round((time.time() - start) * 1000)
         return jsonify({
             "model": model,
@@ -151,7 +179,7 @@ def chat_completions():
             return jsonify({"error": {"message": "Request body harus berupa JSON", "type": "invalid_request_error"}}), 400
 
         messages = data.get("messages", [])
-        model = data.get("model", "mistral-small-24b")
+        model = data.get("model", "gpt-4o-mini")
         stream = data.get("stream", False)
 
         if not messages:
@@ -160,27 +188,22 @@ def chat_completions():
         if stream:
             def generate():
                 try:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        stream=True,
-                    )
-                    buffer = ""
-                    for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            buffer += chunk.choices[0].delta.content
-                            chunk_data = {
-                                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
-                                "object": "chat.completion.chunk",
-                                "created": int(time.time()),
-                                "model": model,
-                                "choices": [{
-                                    "index": 0,
-                                    "delta": {"content": chunk.choices[0].delta.content, "role": "assistant"},
-                                    "finish_reason": None
-                                }]
-                            }
-                            yield f"data: {json.dumps(chunk_data)}\n\n"
+                    response = airforce_chat(messages, model=model, stream=False)
+                    raw = response.get("choices", [{}])[0].get("message", {}).get("content", "") if response.get("choices") else ""
+                    content_text = clean_response(raw)
+                    if content_text:
+                        chunk_data = {
+                            "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": model,
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": content_text, "role": "assistant"},
+                                "finish_reason": None
+                            }]
+                        }
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
 
                     final = {
                         "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -196,7 +219,7 @@ def chat_completions():
                         "error": {
                             "message": str(e),
                             "type": "api_error",
-                            "suggestion": "Model yang stabil: mistral-small-24b, command-a, gpt-4o-mini"
+                            "suggestion": "Model yang stabil: gpt-4o-mini, command-a, qwen-3-32b"
                         }
                     }
                     yield f"data: {json.dumps(error_data)}\n\n"
@@ -211,12 +234,9 @@ def chat_completions():
                 }
             )
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-        )
-
-        content = clean_response(response.choices[0].message.content if response.choices else "")
+        response = airforce_chat(messages, model=model)
+        raw = response.get("choices", [{}])[0].get("message", {}).get("content", "") if response.get("choices") else ""
+        content = clean_response(raw)
         prompt_tokens = sum(len(m.get("content", "").split()) for m in messages)
         completion_tokens = len(content.split())
 
@@ -248,14 +268,14 @@ def chat_completions():
             "error": {
                 "message": error_msg,
                 "type": "api_error",
-                "suggestion": "Model stabil: mistral-small-24b, command-a, gpt-4o-mini, qwen-3-32b"
+                "suggestion": "Model stabil: gpt-4o-mini, command-a, qwen-3-32b"
             }
         }), 500
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  G4F Free AI API — No API Key Needed")
+    print("  Dzeck AI API — Powered by Airforce")
     print(f"  {len(ALL_MODELS)} models available, {len(WORKING_MODELS)} confirmed working")
     print("  POST /v1/chat/completions  (supports streaming)")
     print("  GET  /v1/models")

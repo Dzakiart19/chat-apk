@@ -10,14 +10,13 @@ This is the core autonomous agent implementing:
 4. Full tool system matching ai-manus (shell, file, search, browser, message, mcp)
 5. Event streaming via JSON lines to stdout for SSE relay
 
-Uses g4f (gpt4free) as default LLM provider - free, no API key required.
-Supports OpenAI-compatible API as alternative when API key is configured.
+Uses airforce API (OpenAI-compatible) for all LLM calls.
 """
 import sys
 import json
-import os
 import time
 import traceback
+import urllib.request
 from enum import Enum
 from typing import Optional, Dict, Any, List
 
@@ -122,6 +121,44 @@ TOOL_ALIASES: Dict[str, str] = {
     "search": "web_search",
 }
 
+# -- Airforce API Configuration --
+AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
+AIRFORCE_API_KEY = (
+    "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg"
+)
+DEFAULT_MODEL = "gpt-4o-mini"
+
+# -- OpenAI Function Calling Tool Schemas --
+TOOL_SCHEMAS: List[Dict[str, Any]] = [
+    {"type": "function", "function": {"name": "task_complete", "description": "Signal that the current task step is complete.", "parameters": {"type": "object", "properties": {"success": {"type": "boolean", "description": "Whether the step succeeded"}, "result": {"type": "string", "description": "Summary of what was accomplished"}}, "required": ["success", "result"]}}},
+    {"type": "function", "function": {"name": "message_notify_user", "description": "Send a progress update or result to the user (non-blocking)", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "Message text"}, "attachments": {"type": "array", "items": {"type": "string"}, "description": "File paths to attach"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "message_ask_user", "description": "Ask the user a question and wait for response (blocking)", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "Question to ask"}, "attachments": {"type": "array", "items": {"type": "string"}}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "shell_exec", "description": "Execute a shell command. Use -y/-f flags to avoid prompts.", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command"}, "exec_dir": {"type": "string", "description": "Working directory"}, "id": {"type": "string", "description": "Shell session ID"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "shell_view", "description": "View current output of a running shell session", "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}},
+    {"type": "function", "function": {"name": "shell_wait", "description": "Wait for a running process to complete", "parameters": {"type": "object", "properties": {"id": {"type": "string"}, "seconds": {"type": "integer"}}, "required": ["id"]}}},
+    {"type": "function", "function": {"name": "shell_write_to_process", "description": "Write input to a running process", "parameters": {"type": "object", "properties": {"id": {"type": "string"}, "input": {"type": "string"}, "press_enter": {"type": "boolean"}}, "required": ["id", "input", "press_enter"]}}},
+    {"type": "function", "function": {"name": "shell_kill_process", "description": "Kill a running process", "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}},
+    {"type": "function", "function": {"name": "file_read", "description": "Read content from a text file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}}, "required": ["file"]}}},
+    {"type": "function", "function": {"name": "file_write", "description": "Write content to a file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "content": {"type": "string"}, "append": {"type": "boolean"}, "leading_newline": {"type": "boolean"}, "trailing_newline": {"type": "boolean"}}, "required": ["file", "content"]}}},
+    {"type": "function", "function": {"name": "file_str_replace", "description": "Replace a specific string in a file (exact match)", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "old_str": {"type": "string"}, "new_str": {"type": "string"}}, "required": ["file", "old_str", "new_str"]}}},
+    {"type": "function", "function": {"name": "file_find_by_name", "description": "Find files by name/glob pattern", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "glob": {"type": "string"}}, "required": ["path", "glob"]}}},
+    {"type": "function", "function": {"name": "file_find_in_content", "description": "Search for regex patterns in a file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "regex": {"type": "string"}}, "required": ["file", "regex"]}}},
+    {"type": "function", "function": {"name": "browser_navigate", "description": "Navigate to a URL", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
+    {"type": "function", "function": {"name": "browser_view", "description": "Get current page content", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "browser_click", "description": "Click at (x,y) coordinates", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "button": {"type": "string"}}, "required": ["coordinate_x", "coordinate_y"]}}},
+    {"type": "function", "function": {"name": "browser_type", "description": "Type text into focused element", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "browser_scroll", "description": "Scroll the page", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "direction": {"type": "string"}, "amount": {"type": "integer"}}, "required": ["coordinate_x", "coordinate_y", "direction", "amount"]}}},
+    {"type": "function", "function": {"name": "browser_scroll_to_bottom", "description": "Scroll to bottom", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "browser_read_links", "description": "Get all links from page", "parameters": {"type": "object", "properties": {"max_links": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "browser_console_view", "description": "View browser console logs", "parameters": {"type": "object", "properties": {"max_lines": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "browser_restart", "description": "Restart browser session", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "browser_save_image", "description": "Save an image from page", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "save_dir": {"type": "string"}, "base_name": {"type": "string"}}, "required": ["coordinate_x", "coordinate_y", "save_dir", "base_name"]}}},
+    {"type": "function", "function": {"name": "web_search", "description": "Search the web (DuckDuckGo)", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "num_results": {"type": "integer"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "web_browse", "description": "Browse and extract text from a URL", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
+    {"type": "function", "function": {"name": "mcp_call_tool", "description": "Call an MCP tool", "parameters": {"type": "object", "properties": {"tool_name": {"type": "string"}, "arguments": {"type": "object"}}, "required": ["tool_name"]}}},
+    {"type": "function", "function": {"name": "mcp_list_tools", "description": "List available MCP tools", "parameters": {"type": "object", "properties": {}}}},
+]
+
 
 def emit_event(event_type: str, **data: Any) -> None:
     """Emit a JSON event line to stdout for SSE streaming."""
@@ -130,82 +167,84 @@ def emit_event(event_type: str, **data: Any) -> None:
     sys.stdout.flush()
 
 
-def call_llm(messages: list, model: str = "mistral-small-24b",
-             response_format: Optional[str] = None) -> str:
-    """Call the LLM using g4f or OpenAI-compatible API."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    api_base = os.environ.get("OPENAI_API_BASE", "")
-
-    if api_key:
-        return _call_openai_api(messages, model, api_key, api_base,
-                                response_format)
-    else:
-        return _call_g4f(messages, model)
-
-
-def _call_g4f(messages: list, model: str = "") -> str:
-    """Call LLM using g4f (gpt4free) with PollinationsAI provider (free, no API key)."""
-    from g4f.client import Client
-    from g4f.Provider import PollinationsAI
-
-    client = Client(provider=PollinationsAI)
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        stream=False,
-    )
-
-    if hasattr(response, "choices") and response.choices:
-        return response.choices[0].message.content or ""
-    return ""
-
-
-def _call_openai_api(messages: list, model: str, api_key: str,
-                     api_base: str = "",
-                     response_format: Optional[str] = None) -> str:
-    """Call OpenAI-compatible API."""
-    import urllib.request
-
-    base_url = api_base or "https://api.openai.com/v1"
-    url = f"{base_url}/chat/completions"
-
+def call_airforce_api(
+    messages: list,
+    model: str = DEFAULT_MODEL,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    response_format: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Call the airforce API (OpenAI-compatible). Returns full response dict."""
     body: Dict[str, Any] = {
         "model": model,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 4096,
     }
-
+    if tools:
+        body["tools"] = tools
+        body["tool_choice"] = "auto"
     if response_format == "json_object":
         body["response_format"] = {"type": "json_object"}
 
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
-        url,
+        AIRFORCE_API_URL,
         data=data,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": "Bearer {}".format(AIRFORCE_API_KEY),
         },
         method="POST",
     )
 
     with urllib.request.urlopen(req, timeout=120) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
+        return json.loads(resp.read().decode("utf-8"))
 
+
+def call_airforce_text(
+    messages: list,
+    model: str = DEFAULT_MODEL,
+    response_format: Optional[str] = None,
+) -> str:
+    """Convenience wrapper that returns only the text content."""
+    result = call_airforce_api(messages, model,
+                               response_format=response_format)
     if "choices" in result and result["choices"]:
-        return result["choices"][0]["message"]["content"] or ""
+        return result["choices"][0]["message"].get("content") or ""
     return ""
 
 
-def call_llm_with_retry(messages: list, model: str = "mistral-small-24b",
-                         max_retries: int = 3,
-                         response_format: Optional[str] = None) -> str:
-    """Call LLM with retry logic and exponential backoff."""
+def call_text_with_retry(
+    messages: list,
+    model: str = DEFAULT_MODEL,
+    max_retries: int = 3,
+    response_format: Optional[str] = None,
+) -> str:
+    """Call airforce text API with retry + exponential backoff."""
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            return call_llm(messages, model, response_format)
+            return call_airforce_text(messages, model, response_format)
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(1 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("LLM call failed after retries")
+
+
+def call_api_with_retry(
+    messages: list,
+    model: str = DEFAULT_MODEL,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    max_retries: int = 3,
+) -> Dict[str, Any]:
+    """Call airforce API (full response) with retry + exponential backoff."""
+    last_error: Optional[Exception] = None
+    for attempt in range(max_retries):
+        try:
+            return call_airforce_api(messages, model, tools=tools)
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
@@ -322,19 +361,20 @@ def build_tool_content(
     return None
 
 
+def safe_plan_dict(plan: Plan) -> Dict[str, Any]:
+    """Return plan dict with goal stripped to prevent leaking."""
+    d = plan.to_dict()
+    d.pop("goal", None)
+    return d
+
+
 class DzeckAgent:
     """
     Main agent class implementing the Plan-Act flow.
-
-    Ported from ai-manus PlanActFlow architecture with:
-    - State machine for flow control
-    - Robust JSON parsing (5-stage pipeline)
-    - Memory management with compaction
-    - Full tool system
-    - Event streaming
+    Uses OpenAI function calling for smart tool execution (ai-manus style).
     """
 
-    def __init__(self, model: str = "mistral-small-24b"):
+    def __init__(self, model: str = DEFAULT_MODEL):
         self.model = model
         self.memory = Memory()
         self.max_tool_iterations = 20
@@ -403,7 +443,7 @@ class DzeckAgent:
             {"role": "user", "content": prompt},
         ]
 
-        response_text = call_llm_with_retry(
+        response_text = call_text_with_retry(
             messages, self.model, response_format="json_object"
         )
         parsed = self._parse_response(response_text)
@@ -435,19 +475,101 @@ class DzeckAgent:
             message=parsed.get("message", ""),
         )
 
+    def _handle_tool_call(
+        self,
+        fn_name: str,
+        fn_args: Dict[str, Any],
+        tool_call_id: str,
+        step: Step,
+        iteration: int,
+    ) -> Optional[str]:
+        """Execute a single function-call tool and return the result string.
+
+        Returns "STEP_DONE" for task_complete. Otherwise returns result text.
+        """
+        # task_complete pseudo-tool
+        if fn_name == "task_complete":
+            step.status = ExecutionStatus.COMPLETED
+            step.success = fn_args.get("success", True)
+            step.result = fn_args.get("result", "Step completed")
+            if not step.success:
+                step.status = ExecutionStatus.FAILED
+            status_enum = (StepStatus.COMPLETED if step.success
+                           else StepStatus.FAILED)
+            emit_event("step", status=status_enum.value,
+                       step=step.to_dict())
+            if step.result:
+                emit_event("message", message=step.result,
+                           role="assistant")
+            return "STEP_DONE"
+
+        resolved = resolve_tool_name(fn_name)
+        if resolved is None:
+            return ("Unknown tool '{}'. Available: {}"
+                    .format(fn_name, ", ".join(TOOLS.keys())))
+
+        emit_event(
+            "tool",
+            status=ToolStatus.CALLING.value,
+            tool_name=resolved,
+            function_name=resolved,
+            function_args=fn_args,
+            tool_call_id=tool_call_id,
+        )
+
+        tool_result = execute_tool(resolved, fn_args)
+        tool_content = build_tool_content(resolved, tool_result)
+
+        if resolved == "message_notify_user":
+            emit_event("message",
+                       message=fn_args.get("text", ""),
+                       role="assistant")
+        elif resolved == "message_ask_user":
+            emit_event("wait", prompt=fn_args.get("text", ""))
+            emit_event("message",
+                       message=fn_args.get("text", ""),
+                       role="assistant")
+
+        result_status = (ToolStatus.RESULT if tool_result.success
+                         else ToolStatus.ERROR)
+        fn_result = (str(tool_result.message)[:3000]
+                     if tool_result.message else "")
+        emit_event(
+            "tool",
+            status=result_status.value,
+            tool_name=resolved,
+            function_name=resolved,
+            function_args=fn_args,
+            tool_call_id=tool_call_id,
+            function_result=fn_result,
+            tool_content=tool_content,
+        )
+
+        self.memory.add_message({
+            "role": "tool",
+            "tool_name": resolved,
+            "content": tool_result.message or "",
+        })
+
+        result_summary = tool_result.message or "No result"
+        if len(result_summary) > 4000:
+            result_summary = result_summary[:4000] + "...[truncated]"
+        return result_summary
+
     def execute_step(self, plan: Plan, step: Step,
                      user_message: str) -> None:
         """Execute a single step using tools iteratively.
 
-        Matching ai-manus ExecutionAgent with tool calling loop.
+        Uses OpenAI function calling (ai-manus style). The model decides
+        whether to call tools or not. Falls back to JSON parsing when
+        the model responds with plain text.
         """
         self.state = FlowState.EXECUTING
         step.status = ExecutionStatus.RUNNING
         emit_event("step", status=StepStatus.RUNNING.value,
                    step=step.to_dict())
 
-        # Build context from previous step results
-        context_parts = []
+        context_parts: List[str] = []
         for s in plan.steps:
             if s.is_done() and s.result:
                 context_parts.append("- {}: {}".format(
@@ -463,7 +585,7 @@ class DzeckAgent:
             attachments_info="",
         )
 
-        exec_messages: List[Dict[str, str]] = [
+        exec_messages: List[Dict[str, Any]] = [
             {"role": "system", "content": EXECUTION_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
@@ -475,159 +597,161 @@ class DzeckAgent:
 
         for iteration in range(self.max_tool_iterations):
             try:
-                response_text = call_llm_with_retry(
-                    exec_messages, self.model)
-                parsed = self._parse_response(response_text)
+                # Call API with tools for native function calling
+                api_result = call_api_with_retry(
+                    exec_messages, self.model, tools=TOOL_SCHEMAS)
 
-                if not parsed:
-                    step.status = ExecutionStatus.COMPLETED
-                    step.success = True
-                    step.result = response_text[:500]
-                    emit_event("step",
-                               status=StepStatus.COMPLETED.value,
+                if ("choices" not in api_result
+                        or not api_result["choices"]):
+                    step.status = ExecutionStatus.FAILED
+                    step.result = "Empty LLM response"
+                    emit_event("step", status=StepStatus.FAILED.value,
                                step=step.to_dict())
                     return
 
-                # Check if step is done
-                if parsed.get("done"):
-                    step.status = ExecutionStatus.COMPLETED
-                    step.success = parsed.get("success", True)
-                    step.result = parsed.get("result", "Step completed")
-                    step.attachments = parsed.get("attachments", [])
+                choice = api_result["choices"][0]
+                message = choice.get("message", {})
+                content = message.get("content") or ""
+                tool_calls = message.get("tool_calls")
 
-                    if not step.success:
-                        step.status = ExecutionStatus.FAILED
-                    status = (StepStatus.COMPLETED if step.success
-                              else StepStatus.FAILED)
-                    emit_event("step", status=status.value,
-                               step=step.to_dict())
+                # -- Native function calling path --
+                if tool_calls:
+                    assistant_msg: Dict[str, Any] = {
+                        "role": "assistant",
+                        "content": content if content else None,
+                    }
+                    assistant_msg["tool_calls"] = tool_calls
+                    exec_messages.append(assistant_msg)
 
-                    if step.result:
-                        emit_event("message", message=step.result,
-                                   role="assistant")
-                    return
+                    step_done = False
+                    for tc in tool_calls:
+                        fn_name = tc["function"]["name"]
+                        try:
+                            fn_args = json.loads(
+                                tc["function"]["arguments"])
+                        except (json.JSONDecodeError, KeyError):
+                            fn_args = {}
 
-                # Thinking message
-                if parsed.get("thinking"):
-                    emit_event("thinking", content=parsed["thinking"])
-                    exec_messages.append(
-                        {"role": "assistant", "content": response_text})
-                    exec_messages.append(
-                        {"role": "user",
-                         "content": "Good analysis. Now execute using a tool."})
+                        tc_id = tc.get("id", "tc_{}_{}".format(
+                            step.id, iteration))
+
+                        result_str = self._handle_tool_call(
+                            fn_name, fn_args, tc_id, step, iteration)
+
+                        if result_str == "STEP_DONE":
+                            step_done = True
+                            exec_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "content": "Step marked complete.",
+                            })
+                            break
+
+                        exec_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": result_str or "Done",
+                        })
+
+                    if step_done:
+                        return
+
+                    if iteration > 0 and iteration % 5 == 0:
+                        self.memory.compact()
                     continue
 
-                # Message to user (no tool)
-                if parsed.get("message") and not parsed.get("tool"):
-                    emit_event("message", message=parsed["message"],
-                               role="assistant")
-                    exec_messages.append(
-                        {"role": "assistant", "content": response_text})
-                    exec_messages.append(
-                        {"role": "user",
-                         "content": ("Continue executing the step using "
-                                     "tools, or respond with done:true "
-                                     "if complete.")})
-                    continue
+                # -- Fallback: plain text response (no tool_calls) --
+                if content:
+                    parsed = self._parse_response(content)
 
-                # Tool call
-                tool_name = parsed.get("tool", "")
-                tool_args = parsed.get("args", {})
+                    if parsed.get("done"):
+                        step.status = ExecutionStatus.COMPLETED
+                        step.success = parsed.get("success", True)
+                        step.result = parsed.get(
+                            "result", "Step completed")
+                        step.attachments = parsed.get(
+                            "attachments", [])
+                        if not step.success:
+                            step.status = ExecutionStatus.FAILED
+                        status_enum = (
+                            StepStatus.COMPLETED if step.success
+                            else StepStatus.FAILED)
+                        emit_event("step", status=status_enum.value,
+                                   step=step.to_dict())
+                        if step.result:
+                            emit_event("message",
+                                       message=step.result,
+                                       role="assistant")
+                        return
 
-                if not tool_name:
-                    exec_messages.append(
-                        {"role": "assistant", "content": response_text})
-                    exec_messages.append(
-                        {"role": "user",
-                         "content": ('Please respond with a tool call or '
-                                     'done:true. Format: '
-                                     '{"tool": "name", "args": {...}}')})
-                    continue
+                    if parsed.get("thinking"):
+                        emit_event("thinking",
+                                   content=parsed["thinking"])
+                        exec_messages.append(
+                            {"role": "assistant", "content": content})
+                        exec_messages.append(
+                            {"role": "user",
+                             "content": ("Good analysis. Now execute "
+                                         "using a tool.")})
+                        continue
 
-                resolved_name = resolve_tool_name(tool_name)
-                if resolved_name is None:
-                    exec_messages.append(
-                        {"role": "assistant", "content": response_text})
-                    available = ", ".join(TOOLS.keys())
-                    exec_messages.append(
-                        {"role": "user",
-                         "content": ("Unknown tool '{}'. Available: {}. "
-                                     "Try again."
+                    if parsed.get("tool"):
+                        tool_name = parsed["tool"]
+                        tool_args = parsed.get("args", {})
+                        resolved_name = resolve_tool_name(tool_name)
+
+                        if resolved_name is None:
+                            exec_messages.append(
+                                {"role": "assistant",
+                                 "content": content})
+                            available = ", ".join(TOOLS.keys())
+                            exec_messages.append(
+                                {"role": "user",
+                                 "content": (
+                                     "Unknown tool '{}'. Available: "
+                                     "{}. Try again."
                                      .format(tool_name, available))})
-                    continue
+                            continue
 
-                # Emit tool calling event
-                tool_call_id = "tc_{}_{}".format(step.id, iteration)
-                emit_event(
-                    "tool",
-                    status=ToolStatus.CALLING.value,
-                    tool_name=resolved_name,
-                    function_name=resolved_name,
-                    function_args=tool_args,
-                    tool_call_id=tool_call_id,
-                )
+                        tc_id = "tc_{}_{}".format(step.id, iteration)
+                        result_str = self._handle_tool_call(
+                            resolved_name, tool_args, tc_id,
+                            step, iteration)
 
-                # Execute the tool
-                tool_result = execute_tool(resolved_name, tool_args)
-                tool_content = build_tool_content(
-                    resolved_name, tool_result)
+                        if result_str == "STEP_DONE":
+                            return
 
-                # Handle message tools specially
-                if resolved_name == "message_notify_user":
-                    emit_event("message",
-                               message=tool_args.get("text", ""),
+                        exec_messages.append(
+                            {"role": "assistant", "content": content})
+                        exec_messages.append(
+                            {"role": "user",
+                             "content": (
+                                 "Tool result:\n{}\n\nContinue "
+                                 "executing the step. Use another "
+                                 "tool or call task_complete when "
+                                 "finished."
+                             ).format(result_str)})
+
+                        if iteration > 0 and iteration % 5 == 0:
+                            self.memory.compact()
+                        continue
+
+                    if parsed.get("message"):
+                        emit_event("message",
+                                   message=parsed["message"],
+                                   role="assistant")
+
+                # Text with no actionable JSON = step complete
+                step.status = ExecutionStatus.COMPLETED
+                step.success = True
+                step.result = content[:500] if content else "Step completed"
+                emit_event("step",
+                           status=StepStatus.COMPLETED.value,
+                           step=step.to_dict())
+                if content:
+                    emit_event("message", message=content[:2000],
                                role="assistant")
-                elif resolved_name == "message_ask_user":
-                    emit_event("wait",
-                               prompt=tool_args.get("text", ""))
-                    emit_event("message",
-                               message=tool_args.get("text", ""),
-                               role="assistant")
-
-                # Emit tool result event
-                result_status = (ToolStatus.RESULT if tool_result.success
-                                 else ToolStatus.ERROR)
-                fn_result = (str(tool_result.message)[:3000]
-                             if tool_result.message else "")
-                emit_event(
-                    "tool",
-                    status=result_status.value,
-                    tool_name=resolved_name,
-                    function_name=resolved_name,
-                    function_args=tool_args,
-                    tool_call_id=tool_call_id,
-                    function_result=fn_result,
-                    tool_content=tool_content,
-                )
-
-                # Add to memory
-                self.memory.add_message({
-                    "role": "tool",
-                    "tool_name": resolved_name,
-                    "content": tool_result.message or "",
-                })
-
-                # Feed result back to LLM
-                result_summary = tool_result.message or "No result"
-                if len(result_summary) > 4000:
-                    result_summary = (result_summary[:4000]
-                                      + "...[truncated]")
-
-                exec_messages.append(
-                    {"role": "assistant", "content": response_text})
-                exec_messages.append(
-                    {"role": "user",
-                     "content": (
-                         "Tool result:\n{}\n\n"
-                         "Continue executing the step. Use another "
-                         "tool or respond with "
-                         '{{"done": true, "success": true, '
-                         '"result": "..."}} if the step is complete.'
-                     ).format(result_summary)})
-
-                # Compact memory periodically
-                if iteration > 0 and iteration % 5 == 0:
-                    self.memory.compact()
+                return
 
             except Exception as e:
                 emit_event("error",
@@ -665,7 +789,6 @@ class DzeckAgent:
         remaining = [s for s in plan.steps if not s.is_done()]
         plan_info = json.dumps(
             {
-                "goal": plan.goal,
                 "language": plan.language,
                 "completed_steps": [
                     s.to_dict() for s in plan.steps if s.is_done()
@@ -688,7 +811,7 @@ class DzeckAgent:
         ]
 
         try:
-            response_text = call_llm_with_retry(
+            response_text = call_text_with_retry(
                 messages, self.model, response_format="json_object")
             parsed = self._parse_response(response_text)
 
@@ -711,7 +834,7 @@ class DzeckAgent:
                     plan.steps = completed_list
 
                 emit_event("plan", status=PlanStatus.UPDATED.value,
-                           plan=plan.to_dict())
+                           plan=safe_plan_dict(plan))
 
         except Exception as e:
             emit_event("error",
@@ -740,7 +863,7 @@ class DzeckAgent:
         ]
 
         try:
-            response_text = call_llm_with_retry(messages, self.model)
+            response_text = call_text_with_retry(messages, self.model)
             parsed = self._parse_response(response_text)
 
             if parsed and parsed.get("message"):
@@ -777,7 +900,7 @@ class DzeckAgent:
                 emit_event("message", message=self.plan.message,
                            role="assistant")
             emit_event("plan", status=PlanStatus.CREATED.value,
-                       plan=self.plan.to_dict())
+                       plan=safe_plan_dict(self.plan))
 
             if not self.plan.steps:
                 emit_event(
@@ -790,7 +913,7 @@ class DzeckAgent:
 
             # Phase 2: Execute each step
             emit_event("plan", status=PlanStatus.RUNNING.value,
-                       plan=self.plan.to_dict())
+                       plan=safe_plan_dict(self.plan))
 
             while True:
                 step = self.plan.get_next_step()
@@ -803,13 +926,13 @@ class DzeckAgent:
                 if next_step:
                     emit_event("plan",
                                status=PlanStatus.UPDATING.value,
-                               plan=self.plan.to_dict())
+                               plan=safe_plan_dict(self.plan))
                     self.update_plan(self.plan, step)
 
             # Phase 3: Summarize
             self.plan.status = ExecutionStatus.COMPLETED
             emit_event("plan", status=PlanStatus.COMPLETED.value,
-                       plan=self.plan.to_dict())
+                       plan=safe_plan_dict(self.plan))
             self.summarize(self.plan, user_message)
 
             self.state = FlowState.COMPLETED
@@ -830,7 +953,7 @@ def main() -> None:
         input_data = json.loads(raw_input)
 
         user_message = input_data.get("message", "")
-        model = input_data.get("model", "mistral-small-24b")
+        model = input_data.get("model", DEFAULT_MODEL)
         messages = input_data.get("messages", [])
         attachments = input_data.get("attachments", [])
 

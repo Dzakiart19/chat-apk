@@ -1,37 +1,48 @@
 #!/usr/bin/env python3
 """
-g4f Chat Handler for Dzeck AI
-Uses gpt4free library with PollinationsAI provider (free, no API key required).
+Airforce Chat Handler for Dzeck AI
+Uses airforce API (OpenAI-compatible) for chat completions.
 Reads JSON from stdin, streams response as JSON lines to stdout.
-
-PollinationsAI supports true token-by-token streaming.
 """
 import sys
 import json
-import asyncio
+import urllib.request
+
+AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
+AIRFORCE_API_KEY = (
+    "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg"
+)
 
 
-async def stream_response(messages: list) -> None:
-    """Stream response using PollinationsAI async generator."""
-    from g4f.Provider import PollinationsAI
+def stream_response(messages: list, model: str = "gpt-4o-mini") -> None:
+    """Stream response from airforce API."""
+    body = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 4096,
+        "stream": False,
+    }).encode("utf-8")
 
-    gen = PollinationsAI.create_async_generator(
-        model="",
-        messages=messages,
-        stream=True,
+    req = urllib.request.Request(
+        AIRFORCE_API_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {}".format(AIRFORCE_API_KEY),
+        },
+        method="POST",
     )
 
-    async for chunk in gen:
-        if hasattr(chunk, "choices") and chunk.choices:
-            choice = chunk.choices[0]
-            if (
-                hasattr(choice, "delta")
-                and hasattr(choice.delta, "content")
-                and choice.delta.content
-            ):
-                data = json.dumps({"content": choice.delta.content})
-                sys.stdout.write(data + "\n")
-                sys.stdout.flush()
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        result = json.loads(resp.read().decode("utf-8"))
+
+    if "choices" in result and result["choices"]:
+        content = result["choices"][0]["message"].get("content", "")
+        if content:
+            data = json.dumps({"content": content})
+            sys.stdout.write(data + "\n")
+            sys.stdout.flush()
 
 
 def main():
@@ -39,8 +50,9 @@ def main():
         raw_input = sys.stdin.read()
         input_data = json.loads(raw_input)
         messages = input_data.get("messages", [])
+        model = input_data.get("model", "gpt-4o-mini")
 
-        asyncio.run(stream_response(messages))
+        stream_response(messages, model)
 
         sys.stdout.write(json.dumps({"done": True}) + "\n")
         sys.stdout.flush()

@@ -1,7 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import { spawn } from "node:child_process";
-import * as path from "node:path";
+import * as https from "node:https";
+
+const AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions";
+const AIRFORCE_API_KEY =
+  "sk-air-QzarypeWD8oB4vEUy5ucuVl1Efef6NSFepurPPiQaeChKQEQxTT7u03T09ikagyg";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check / status endpoint
@@ -13,7 +17,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Chat API endpoint with SSE streaming
+  // Chat API endpoint with SSE streaming - calls airforce API directly
   app.post("/api/chat", (req, res) => {
     const { messages, model } = req.body;
 
@@ -28,75 +32,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    const pythonScript = path.resolve(process.cwd(), "server", "g4f_chat.py");
-    const proc = spawn("python3", [pythonScript], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    const input = JSON.stringify({
+    const requestBody = JSON.stringify({
+      model: model || "gpt-4o-mini",
       messages,
-      model: model || "mistral-small-24b",
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 4096,
     });
-    proc.stdin.write(input);
-    proc.stdin.end();
 
-    let buffer = "";
-    let doneSent = false;
+    const url = new URL(AIRFORCE_API_URL);
 
-    proc.stdout.on("data", (data: Buffer) => {
-      buffer += data.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+    const options: https.RequestOptions = {
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${AIRFORCE_API_KEY}`,
+        "Content-Length": Buffer.byteLength(requestBody),
+      },
+    };
 
-      for (const line of lines) {
-        if (line.trim()) {
+    const apiReq = https.request(options, (apiRes) => {
+      let apiBuffer = "";
+
+      apiRes.on("data", (chunk: Buffer) => {
+        apiBuffer += chunk.toString();
+        const lines = apiBuffer.split("\n");
+        apiBuffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") {
+            res.write("data: [DONE]\n\n");
+            return;
+          }
+
           try {
-            const parsed = JSON.parse(line);
-            if (parsed.done) {
-              doneSent = true;
-              res.write("data: [DONE]\n\n");
-            } else if (parsed.error) {
+            const parsed = JSON.parse(data);
+            if (parsed.choices && parsed.choices[0]?.delta?.content) {
               res.write(
-                `data: ${JSON.stringify({ error: parsed.error })}\n\n`,
-              );
-            } else if (parsed.content) {
-              res.write(
-                `data: ${JSON.stringify({ content: parsed.content })}\n\n`,
+                `data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`,
               );
             }
           } catch {
-            // Skip malformed JSON lines
+            // Skip malformed JSON
           }
         }
-      }
-    });
+      });
 
-    proc.stderr.on("data", (data: Buffer) => {
-      console.error("g4f stderr:", data.toString());
-    });
-
-    proc.on("close", () => {
-      if (!res.writableEnded) {
-        if (!doneSent) {
+      apiRes.on("end", () => {
+        if (!res.writableEnded) {
           res.write("data: [DONE]\n\n");
+          res.end();
         }
-        res.end();
-      }
+      });
+
+      apiRes.on("error", (err) => {
+        console.error("Airforce API response error:", err);
+        if (!res.writableEnded) {
+          res.write(
+            `data: ${JSON.stringify({ error: "AI service error" })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          res.end();
+        }
+      });
     });
 
-    proc.on("error", (err) => {
-      console.error("g4f process error:", err);
+    apiReq.on("error", (err) => {
+      console.error("Airforce API request error:", err);
       if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ error: "AI service error" })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ error: "AI service connection error" })}\n\n`,
+        );
         res.write("data: [DONE]\n\n");
         res.end();
       }
     });
 
+    apiReq.write(requestBody);
+    apiReq.end();
+
     res.on("close", () => {
-      if (!proc.killed) {
-        proc.kill();
-      }
+      apiReq.destroy();
     });
   });
 
@@ -124,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const input = JSON.stringify({
       message: message || "",
       messages: messages || [],
-      model: model || "mistral-small-24b",
+      model: model || "gpt-4o-mini",
       attachments: attachments || [],
     });
     proc.stdin.write(input);
