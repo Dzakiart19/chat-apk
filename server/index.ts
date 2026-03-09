@@ -17,14 +17,27 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origins = new Set<string>();
 
+    // Support Replit domains
     if (process.env.REPLIT_DEV_DOMAIN) {
       origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
     }
 
     if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
+      process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
         origins.add(`https://${d.trim()}`);
       });
+    }
+
+    // Support custom allowed origins via CORS_ORIGINS env var (comma-separated)
+    if (process.env.CORS_ORIGINS) {
+      process.env.CORS_ORIGINS.split(",").forEach((o: string) => {
+        origins.add(o.trim());
+      });
+    }
+
+    // Support the app's own domain
+    if (process.env.APP_DOMAIN) {
+      origins.add(`https://${process.env.APP_DOMAIN}`);
     }
 
     const origin = req.header("origin");

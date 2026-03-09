@@ -13,8 +13,8 @@
         margin: 0;
         padding: 32px 20px;
         text-align: center;
-        background: #fff;
-        color: #222;
+        background: #0A0A0C;
+        color: #E8E8ED;
         line-height: 1.5;
         min-height: 100vh;
       }
@@ -22,15 +22,31 @@
         max-width: 480px;
         margin: 0 auto;
       }
+      .logo {
+        width: 64px;
+        height: 64px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #6C5CE7, #7C6CF7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        box-shadow: 0 8px 32px rgba(108, 92, 231, 0.3);
+      }
+      .logo svg {
+        width: 32px;
+        height: 32px;
+        fill: #FFFFFF;
+      }
       h1 {
-        font-size: 26px;
-        font-weight: 600;
+        font-size: 28px;
+        font-weight: 700;
         margin: 0;
-        color: #111;
+        color: #FFFFFF;
       }
       .subtitle {
         font-size: 15px;
-        color: #666;
+        color: #8E8E93;
         margin-top: 8px;
         margin-bottom: 32px;
       }
@@ -39,8 +55,8 @@
         margin: 60px 0;
       }
       .spinner {
-        border: 2px solid #ddd;
-        border-top-color: #333;
+        border: 2px solid #2C2C30;
+        border-top-color: #6C5CE7;
         border-radius: 50%;
         width: 32px;
         height: 32px;
@@ -54,24 +70,22 @@
       }
       .loading-text {
         font-size: 16px;
-        color: #444;
+        color: #8E8E93;
       }
       .content {
         display: block;
       }
-
       .steps-container {
         display: flex;
         flex-direction: column;
         gap: 20px;
       }
-
       .step {
         padding: 24px;
-        border: 1px solid #ddd;
-        border-radius: 12px;
+        border: 1px solid #2C2C30;
+        border-radius: 16px;
         text-align: center;
-        background: #fafafa;
+        background: #141418;
       }
       .step-header {
         display: flex;
@@ -83,7 +97,7 @@
       .step-number {
         width: 28px;
         height: 28px;
-        border: 1px solid #999;
+        border: 1px solid #6C5CE7;
         border-radius: 50%;
         display: flex;
         align-items: center;
@@ -91,20 +105,19 @@
         font-weight: 600;
         font-size: 14px;
         flex-shrink: 0;
-        color: #555;
+        color: #6C5CE7;
       }
       .step-title {
         font-size: 18px;
         font-weight: 600;
         margin: 0;
-        color: #222;
+        color: #FFFFFF;
       }
       .step-description {
         font-size: 14px;
         margin-bottom: 16px;
-        color: #666;
+        color: #8E8E93;
       }
-
       .store-buttons {
         display: flex;
         flex-direction: column;
@@ -120,16 +133,16 @@
         padding: 12px 20px;
         font-size: 14px;
         font-weight: 500;
-        border: 1px solid #ccc;
-        border-radius: 8px;
+        border: 1px solid #2C2C30;
+        border-radius: 10px;
         text-decoration: none;
-        color: #333;
-        background: #fff;
+        color: #E8E8ED;
+        background: #1A1A20;
         transition: all 0.15s;
       }
       .store-button:hover {
-        background: #f5f5f5;
-        border-color: #999;
+        background: #222228;
+        border-color: #6C5CE7;
       }
       .store-link {
         display: inline-flex;
@@ -141,13 +154,13 @@
         font-weight: 400;
         text-decoration: underline;
         text-underline-offset: 2px;
-        color: #666;
+        color: #636366;
         background: none;
         border: none;
         transition: color 0.15s;
       }
       .store-link:hover {
-        color: #333;
+        color: #8E8E93;
       }
       .store-link .store-icon {
         width: 14px;
@@ -157,28 +170,26 @@
         width: 18px;
         height: 18px;
       }
-
       .qr-section {
-        background: #333;
-        color: #fff;
-        border-color: #333;
+        background: linear-gradient(135deg, #1A1A24, #141420);
+        border-color: #6C5CE7;
       }
       .qr-section .step-number {
-        border-color: rgba(255, 255, 255, 0.5);
-        color: #fff;
+        border-color: rgba(108, 92, 231, 0.6);
+        color: #7C6CF7;
       }
       .qr-section .step-title {
         color: #fff;
       }
       .qr-section .step-description {
-        color: rgba(255, 255, 255, 0.7);
+        color: rgba(255, 255, 255, 0.6);
       }
       .qr-code {
         width: 180px;
         height: 180px;
         margin: 0 auto 16px;
         background: #fff;
-        border-radius: 8px;
+        border-radius: 12px;
         padding: 12px;
       }
       .qr-code canvas {
@@ -189,19 +200,23 @@
         display: inline-block;
         padding: 12px 24px;
         font-size: 14px;
-        font-weight: 500;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
         text-decoration: none;
-        color: #333;
-        background: #fff;
+        color: #FFFFFF;
+        background: linear-gradient(135deg, #6C5CE7, #7C6CF7);
         transition: opacity 0.15s;
+        box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
       }
       .open-button:hover {
         opacity: 0.9;
       }
-
-      /* Desktop styles */
+      .footer {
+        margin-top: 40px;
+        font-size: 13px;
+        color: #636366;
+      }
       @media (min-width: 768px) {
         body {
           padding: 48px 32px;
@@ -243,8 +258,6 @@
           height: 200px;
         }
       }
-
-      /* Large desktop */
       @media (min-width: 1024px) {
         .wrapper {
           max-width: 800px;
@@ -259,73 +272,6 @@
           padding: 32px;
         }
       }
-
-      /* Dark mode */
-      @media (prefers-color-scheme: dark) {
-        body {
-          background: #0d0d0d;
-          color: #e0e0e0;
-        }
-        h1 {
-          color: #f5f5f5;
-        }
-        .subtitle {
-          color: #999;
-        }
-        .spinner {
-          border-color: #444;
-          border-top-color: #ccc;
-        }
-        .loading-text {
-          color: #aaa;
-        }
-        .step {
-          border-color: #333;
-          background: #1a1a1a;
-        }
-        .step-number {
-          border-color: #666;
-          color: #bbb;
-        }
-        .step-title {
-          color: #f0f0f0;
-        }
-        .step-description {
-          color: #888;
-        }
-        .store-button {
-          border-color: #444;
-          color: #e0e0e0;
-          background: #222;
-        }
-        .store-button:hover {
-          background: #2a2a2a;
-          border-color: #666;
-        }
-        .store-link {
-          color: #888;
-        }
-        .store-link:hover {
-          color: #ccc;
-        }
-        .qr-section {
-          background: #111;
-          border-color: #333;
-        }
-        .qr-section .step-number {
-          border-color: rgba(255, 255, 255, 0.4);
-        }
-        .qr-section .step-description {
-          color: rgba(255, 255, 255, 0.6);
-        }
-        .open-button {
-          background: #f0f0f0;
-          color: #111;
-        }
-        .open-button:hover {
-          background: #e0e0e0;
-        }
-      }
     </style>
   </head>
   <body>
@@ -336,8 +282,13 @@
       </div>
 
       <div class="content" id="content">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2Z"/>
+          </svg>
+        </div>
         <h1>APP_NAME_PLACEHOLDER</h1>
-        <p class="subtitle">Preview this app on your phone</p>
+        <p class="subtitle">AI assistant powered by Mistral &mdash; Preview on your phone</p>
 
         <div class="steps-container">
           <div class="step">
@@ -346,7 +297,7 @@
               <h2 class="step-title">Download Expo Go</h2>
             </div>
             <p class="step-description">
-              Expo Go is a free app to test mobile apps
+              Expo Go is a free app to preview mobile apps instantly
             </p>
             <div class="store-buttons" id="store-buttons">
               <a
@@ -390,6 +341,10 @@
             >
           </div>
         </div>
+
+        <div class="footer">
+          <p>Powered by <strong>Dzeck AI</strong> &mdash; Mistral Small 24B</p>
+        </div>
       </div>
     </div>
 
@@ -407,7 +362,6 @@
 
         const deepLink = "exps://EXPS_URL_PLACEHOLDER";
 
-        // Adjust store buttons based on platform
         const appStoreBtn = document.getElementById("app-store-btn");
         const playStoreBtn = document.getElementById("play-store-btn");
         const storeButtonsContainer = document.getElementById("store-buttons");
@@ -425,7 +379,7 @@
           height: 400,
           data: deepLink,
           dotsOptions: {
-            color: "#333333",
+            color: "#6C5CE7",
             type: "rounded",
           },
           backgroundOptions: {
