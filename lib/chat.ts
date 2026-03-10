@@ -227,4 +227,6 @@ export interface ChatAttachment {
 export type ChatListItem =
   | { kind: "chat"; data: ChatMessage }
   | { kind: "agent"; data: AgentEvent; id: string }
-  | { kind: "plan_view"; id: string };
+  | { kind: "plan_view"; id: string }
+  | { kind: "tool_card"; data: AgentEvent; id: string }
+  | { kind: "computer_view"; id: string };

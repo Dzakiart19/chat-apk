@@ -470,12 +470,112 @@ def emit_streaming_message(text: str, role: str = "assistant") -> None:
     if not text or not text.strip():
         return
     emit_event("message_start", role=role)
-    words = text.split(" ")
-    for i, word in enumerate(words):
-        chunk = word if i == 0 else " " + word
-        emit_event("message_chunk", chunk=chunk, role=role)
-        time.sleep(0.012)
+    # Stream character-by-character for more natural feel
+    buf = ""
+    for ch in text:
+        buf += ch
+        # Emit on word boundaries or punctuation for smoother streaming
+        if ch in (" ", "\n", ".", ",", "!", "?", ":", ";"):
+            if buf:
+                emit_event("message_chunk", chunk=buf, role=role)
+                buf = ""
+                time.sleep(0.008)
+    if buf:
+        emit_event("message_chunk", chunk=buf, role=role)
     emit_event("message_end", role=role)
+
+
+def call_cf_streaming(messages: list) -> None:
+    """Call Cloudflare Workers AI with stream=True and emit chunks in real-time.
+
+    Emits message_start, message_chunk, message_end events as SSE.
+    """
+    url = _get_cf_url()
+    body: Dict[str, Any] = {
+        "messages": messages,
+        "max_tokens": 4096,
+        "stream": True,
+    }
+
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {}".format(CF_API_KEY),
+            "User-Agent": "DzeckAI/1.0",
+        },
+        method="POST",
+    )
+
+    emit_event("message_start", role="assistant")
+    full_text = ""
+
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            buf = ""
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="replace")
+                buf += line
+                while "\n" in buf:
+                    chunk_line, buf = buf.split("\n", 1)
+                    chunk_line = chunk_line.strip()
+                    if not chunk_line or not chunk_line.startswith("data: "):
+                        continue
+                    payload = chunk_line[6:]
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        parsed = json.loads(payload)
+                        content = (
+                            parsed.get("response")
+                            or (parsed.get("choices", [{}])[0]
+                                .get("delta", {})
+                                .get("content"))
+                            or ""
+                        )
+                        if content:
+                            emit_event("message_chunk", chunk=content, role="assistant")
+                            full_text += content
+                    except (json.JSONDecodeError, IndexError, KeyError):
+                        pass
+    except Exception as e:
+        if not full_text:
+            emit_event("message_chunk",
+                       chunk="I'm sorry, I encountered an error.",
+                       role="assistant")
+        sys.stderr.write("Streaming error: {}\n".format(e))
+        sys.stderr.flush()
+
+    emit_event("message_end", role="assistant")
+    return full_text
+
+
+def call_cf_streaming_with_retry(
+    messages: list,
+    max_retries: int = 3,
+) -> str:
+    """Call CF streaming API with retry on failure."""
+    last_error: Optional[Exception] = None
+    for attempt in range(max_retries):
+        try:
+            result = call_cf_streaming(messages)
+            if result:
+                return result
+            # Empty result, retry
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return result or ""
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+    if last_error is not None:
+        sys.stderr.write("Streaming retry failed: {}\n".format(last_error))
+        sys.stderr.flush()
+    return ""
 
 
 def call_cf_api(
@@ -1135,7 +1235,10 @@ class DzeckAgent:
             emit_event("error", error="Plan update skipped: {}".format(e))
 
     def summarize(self, plan: Plan, user_message: str) -> None:
-        """Generate a final summary of the completed task."""
+        """Generate a final summary of the completed task.
+
+        Uses real streaming for smooth output.
+        """
         self.state = FlowState.SUMMARIZING
 
         step_results = []
@@ -1149,28 +1252,21 @@ class DzeckAgent:
             message=user_message,
         )
 
+        # Use a system prompt that enforces plain text
+        summarize_system = (
+            SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with plain text only. "
+            "Do NOT output JSON. Give a clear, helpful summary of the results."
+        )
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": summarize_system},
             {"role": "user", "content": prompt},
         ]
 
         try:
-            response_text = call_text_with_retry(messages)
-            parsed = self._parse_response(response_text)
-
-            if parsed and parsed.get("message"):
-                emit_streaming_message(str(parsed["message"])[:4000])
-            else:
-                clean = response_text.strip()
-                if clean and not clean.startswith("{"):
-                    emit_streaming_message(clean[:4000])
-                elif parsed:
-                    summary = (parsed.get("summary") or parsed.get("result")
-                               or parsed.get("text") or "Task completed.")
-                    emit_streaming_message(str(summary)[:4000])
-                else:
-                    emit_streaming_message("Task completed.")
-
+            result = call_cf_streaming_with_retry(messages)
+            if not result:
+                emit_streaming_message("Task completed.")
         except Exception as e:
             emit_streaming_message("Task completed.")
 
@@ -1234,7 +1330,10 @@ class DzeckAgent:
         return False
 
     def _respond_directly(self, user_message: str) -> None:
-        """Respond directly without Plan-Act flow for simple queries."""
+        """Respond directly without Plan-Act flow for simple queries.
+
+        Uses real streaming from Cloudflare API for smooth character-by-character output.
+        """
         messages = [
             {"role": "system", "content": (
                 "You are Dzeck, an AI assistant created by the Dzeck team. "
@@ -1246,22 +1345,20 @@ class DzeckAgent:
         ]
 
         try:
-            response_text = call_text_with_retry(messages)
-            if response_text:
-                clean = response_text.strip()
-                if clean.startswith("{") or clean.startswith("["):
-                    parsed = self._parse_response(clean)
-                    clean = (parsed.get("message") or parsed.get("response")
-                             or parsed.get("text") or "Hello! How can I help you?")
-                emit_streaming_message(clean[:4000])
-            else:
+            result = call_cf_streaming_with_retry(messages)
+            if not result:
                 emit_streaming_message("I'm sorry, I couldn't generate a response.")
         except Exception as e:
             emit_event("error", error="Response error: {}".format(e))
 
     def run(self, user_message: str,
             attachments: Optional[List[str]] = None) -> None:
-        """Main agent flow: Smart routing → Plan → Execute → Summarize."""
+        """Main agent flow: Smart routing → Plan → Execute → Summarize.
+
+        Follows ai-manus pattern:
+        1. Detect simple queries → respond directly with streaming
+        2. Complex tasks → Plan with streaming intro → Execute with tool cards → Summarize
+        """
         try:
             if not attachments and self._is_simple_query(user_message):
                 self._respond_directly(user_message)
@@ -1275,14 +1372,16 @@ class DzeckAgent:
             self.plan = self.run_planner(user_message, attachments)
 
             emit_event("title", title=self.plan.title)
+
+            # Stream the plan intro message for smooth UX (like ai-manus)
             if self.plan.message:
-                emit_event("message", message=self.plan.message, role="assistant")
+                emit_streaming_message(self.plan.message)
+
             emit_event("plan", status=PlanStatus.CREATED.value,
                        plan=safe_plan_dict(self.plan))
 
             if not self.plan.steps:
-                emit_event("message", message="No actionable steps needed.",
-                           role="assistant")
+                emit_streaming_message("No actionable steps needed.")
                 emit_event("done", success=True)
                 return
 

@@ -24,6 +24,8 @@ import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { ChatHistoryModal } from "@/components/ChatHistoryModal";
 import { AgentPlanView } from "@/components/AgentPlanView";
 import { AgentWorking } from "@/components/AgentThinking";
+import { AgentToolCard } from "@/components/AgentToolCard";
+import { ComputerView } from "@/components/ComputerView";
 import { streamChat, streamAgent } from "@/lib/chat";
 import {
   saveChatSession,
@@ -78,6 +80,13 @@ export default function ChatScreen() {
     functionName?: string;
   } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [browserState, setBrowserState] = useState<{
+    url: string;
+    title: string;
+    content: string;
+    screenshot?: string;
+    isLoading: boolean;
+  } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef<string>(Date.now().toString());
@@ -306,15 +315,25 @@ export default function ChatScreen() {
             continue;
           }
 
-          // ── Tool events: track inside current step (not in feed) ──
+          // ── Tool events: show inline as Manus-style cards + track in plan ──
           if (event.type === "tool") {
             const stepId = currentStepIdRef.current;
+            const toolEventId = `tool-${event.tool_call_id || eventId}`;
+
             if (event.status === "calling") {
               setAgentStatus({
                 label: event.function_name || "Using tool",
                 toolName: event.tool_name,
                 functionName: event.function_name,
               });
+
+              // Add tool card inline in feed (Manus-style)
+              setAgentEvents((prev) => [
+                ...prev,
+                { kind: "tool_card", data: event, id: toolEventId },
+              ]);
+
+              // Also track in plan
               if (stepId) {
                 setCurrentPlan((prev) => {
                   if (!prev) return prev;
@@ -328,8 +347,29 @@ export default function ChatScreen() {
                   };
                 });
               }
+
+              // Track browser state for computer view
+              if (event.function_name?.startsWith("browser_")) {
+                setBrowserState((prev) => ({
+                  url: (event.function_args?.url as string) || prev?.url || "",
+                  title: prev?.title || "",
+                  content: prev?.content || "",
+                  isLoading: true,
+                }));
+              }
             } else if (event.status === "called" || event.status === "error") {
               setAgentStatus({ label: "Processing..." });
+
+              // Update the existing tool card in the feed
+              setAgentEvents((prev) =>
+                prev.map((item) =>
+                  item.kind === "tool_card" && item.id === toolEventId
+                    ? { ...item, data: event }
+                    : item,
+                ),
+              );
+
+              // Update plan tool tracking
               if (stepId) {
                 setCurrentPlan((prev) => {
                   if (!prev) return prev;
@@ -352,6 +392,16 @@ export default function ChatScreen() {
                     }),
                   };
                 });
+              }
+
+              // Update browser state from tool result
+              if (event.function_name?.startsWith("browser_") && event.tool_content) {
+                setBrowserState((prev) => ({
+                  url: (event.tool_content?.url as string) || prev?.url || "",
+                  title: (event.tool_content?.title as string) || "",
+                  content: (event.tool_content?.content as string) || "",
+                  isLoading: false,
+                }));
               }
             }
             scrollToBottom();
@@ -475,6 +525,7 @@ export default function ChatScreen() {
     setAgentEvents([]);
     setCurrentPlan(null);
     setAgentStatus(null);
+    setBrowserState(null);
     sessionIdRef.current = Date.now().toString();
     streamingMsgIdRef.current = null;
     currentStepIdRef.current = null;
@@ -526,9 +577,20 @@ export default function ChatScreen() {
           </View>
         ) : null;
       }
+      if (item.kind === "tool_card") {
+        return <AgentToolCard event={item.data} />;
+      }
+      if (item.kind === "computer_view") {
+        return (
+          <ComputerView
+            browserState={browserState}
+            onClose={() => setBrowserState(null)}
+          />
+        );
+      }
       return <AgentMessage event={item.data} />;
     },
-    [currentPlan],
+    [currentPlan, browserState],
   );
 
   const chatKeyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -536,6 +598,8 @@ export default function ChatScreen() {
     (item: ChatListItem) => {
       if (item.kind === "chat") return item.data.id;
       if (item.kind === "plan_view") return item.id;
+      if (item.kind === "tool_card") return item.id;
+      if (item.kind === "computer_view") return item.id;
       return item.id;
     },
     [],
