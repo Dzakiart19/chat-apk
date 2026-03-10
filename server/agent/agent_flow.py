@@ -485,10 +485,11 @@ def emit_streaming_message(text: str, role: str = "assistant") -> None:
     emit_event("message_end", role=role)
 
 
-def call_cf_streaming(messages: list) -> None:
+def call_cf_streaming(messages: list, emit_events: bool = True) -> str:
     """Call Cloudflare Workers AI with stream=True and emit chunks in real-time.
 
-    Emits message_start, message_chunk, message_end events as SSE.
+    When emit_events=True, emits message_start, message_chunk, message_end
+    events as SSE. Returns the full text response.
     """
     url = _get_cf_url()
     body: Dict[str, Any] = {
@@ -509,7 +510,8 @@ def call_cf_streaming(messages: list) -> None:
         method="POST",
     )
 
-    emit_event("message_start", role="assistant")
+    if emit_events:
+        emit_event("message_start", role="assistant")
     full_text = ""
 
     try:
@@ -536,19 +538,21 @@ def call_cf_streaming(messages: list) -> None:
                             or ""
                         )
                         if content:
-                            emit_event("message_chunk", chunk=content, role="assistant")
+                            if emit_events:
+                                emit_event("message_chunk", chunk=content, role="assistant")
                             full_text += content
                     except (json.JSONDecodeError, IndexError, KeyError):
                         pass
     except Exception as e:
-        if not full_text:
+        if not full_text and emit_events:
             emit_event("message_chunk",
                        chunk="I'm sorry, I encountered an error.",
                        role="assistant")
         sys.stderr.write("Streaming error: {}\n".format(e))
         sys.stderr.flush()
 
-    emit_event("message_end", role="assistant")
+    if emit_events:
+        emit_event("message_end", role="assistant")
     return full_text
 
 
@@ -556,11 +560,24 @@ def call_cf_streaming_with_retry(
     messages: list,
     max_retries: int = 3,
 ) -> str:
-    """Call CF streaming API with retry on failure."""
+    """Call CF streaming API with retry on failure.
+
+    On first attempt, emits SSE events (message_start/chunk/end).
+    On retry, does a silent attempt first, then emits if successful.
+    """
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            result = call_cf_streaming(messages)
+            # First attempt: emit events directly for real-time streaming
+            # Retries: try silently first to avoid duplicate message_start events
+            if attempt == 0:
+                result = call_cf_streaming(messages, emit_events=True)
+            else:
+                result = call_cf_streaming(messages, emit_events=False)
+                # If retry succeeded, emit the result as a streamed message
+                if result:
+                    emit_streaming_message(result)
+
             if result:
                 return result
             # Empty result, retry
