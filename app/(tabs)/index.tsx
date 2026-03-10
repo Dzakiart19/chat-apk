@@ -259,9 +259,10 @@ export default function ChatScreen() {
             if (event.plan) {
               if (!planViewAddedRef.current) {
                 planViewAddedRef.current = true;
+                const pvId = `plan-view-${sessionIdRef.current}`;
                 setAgentEvents((prev) => [
                   ...prev,
-                  { kind: "plan_view", id: "plan-view" },
+                  { kind: "plan_view", id: pvId },
                 ]);
               }
               setCurrentPlan((prev) => {
@@ -341,9 +342,10 @@ export default function ChatScreen() {
               if (event.function_name?.startsWith("browser_")) {
                 if (!computerViewAddedRef.current) {
                   computerViewAddedRef.current = true;
+                  const cvId = `computer-view-${sessionIdRef.current}`;
                   setAgentEvents((prev) => [
                     ...prev,
-                    { kind: "computer_view", id: "computer-view" },
+                    { kind: "computer_view", id: cvId },
                   ]);
                 }
                 setBrowserState((prev) => ({

@@ -2,16 +2,27 @@
 
 Cross-platform AI chat + autonomous agent app built with Expo (React Native) and Node.js backend.
 
-## Architecture
+## Architecture (Upgraded to ai-manus pattern)
 
-- **Frontend**: Expo/React Native (web via Metro bundler on port 8081)
-- **Backend**: Express.js server on port 5000 (main webview)
-- **AI Engine**: Python 3.11 calling Cloudflare Workers AI via urllib.request
+| Aspek | Implementation |
+|---|---|
+| Language | Python async (AsyncGenerator) |
+| LLM | Cloudflare Workers AI (llama-3-8b) |
+| Framework | Pydantic BaseModel + async generator streaming |
+| Database | MongoDB Atlas (motor async driver) for session/agent persistence |
+| Cache | Redis (aioredis) for session state caching |
+| Browser | Playwright real browser + HTTP fallback |
+| Architecture | DDD: Domain / Application / Infrastructure layers |
+| Session mgmt | Full session resume + rollback support |
 
 ## Key Features
 
 - **Chat Mode**: Real-time streaming via Cloudflare Workers AI SSE
-- **Agent Mode**: Autonomous Plan-Act agent with real tool execution (shell, file, web search, browser, MCP)
+- **Agent Mode**: Async autonomous Plan-Act agent with real tool execution
+- **Session Persistence**: Full MongoDB session history with Redis cache
+- **Browser Automation**: Playwright-powered real browser (with HTTP fallback)
+- **Session Resume/Rollback**: Resume interrupted sessions, rollback to any step
+- **DDD Architecture**: Clean separation of domain, application, and infrastructure
 
 ## Setup
 
@@ -20,71 +31,88 @@ Cross-platform AI chat + autonomous agent app built with Expo (React Native) and
 1. **Backend** (Start Backend workflow): `npm run server:dev` — serves on port 5000
 2. **Frontend** (Start Frontend workflow): Expo Metro bundler on port 8081
 
-### AI Configuration
-
-- Uses **Cloudflare Workers AI** via AI Gateway
-- Credentials stored in `.env` file
-- Model: `@cf/meta/llama-3-8b-instruct`
-- Retry logic: exponential backoff (up to 5 retries) for HTTP 429 and 5xx errors
-- User-Agent header required to avoid Cloudflare bot detection
-
-### Environment Variables
-
-Create `.env` in project root (copy from `.env.example`):
+### Environment Variables (set in Replit Secrets)
 
 ```
-CF_API_KEY=your-cloudflare-api-key-here
-CF_ACCOUNT_ID=your-account-id-here
-CF_GATEWAY_NAME=your-gateway-name-here
+CF_API_KEY=<cloudflare-api-key>
+CF_ACCOUNT_ID=6c807fe58ad83714e772403cd528dbeb
+CF_GATEWAY_NAME=dzeck
 CF_MODEL=@cf/meta/llama-3-8b-instruct
-PORT=5000
-NODE_ENV=development
+MONGODB_URI=<mongodb-atlas-uri>
+REDIS_HOST=<redis-host>
+REDIS_PORT=16364
+REDIS_PASSWORD=<redis-password>
+SESSION_TTL_HOURS=24
+PLAYWRIGHT_ENABLED=true
 ```
-
-The `.env` file is loaded automatically at startup by both Node.js (`server/index.ts`) and Python (`agent_flow.py`, `g4f_chat.py`, `tools/mcp.py`).
-
-### Python Dependencies
-
-- `pydantic>=2.0.0` - Data models for agent
-- `beautifulsoup4>=4.12.0` - HTML parsing for browser tool
 
 ## File Structure
 
 ```
 server/
-  index.ts          - Express server entry point (.env loading here)
-  routes.ts         - API routes (/api/chat, /api/agent) — Cloudflare SSE streaming
-  g4f_chat.py       - Python bridge for chat (Cloudflare Workers AI)
+  index.ts              - Express server entry point
+  routes.ts             - API routes + session management endpoints
   agent/
-    agent_flow.py   - Core Plan-Act autonomous agent (Cloudflare Workers AI + tool calling)
-    tools/          - Agent tools (shell, file, search, browser, mcp)
-    prompts/        - LLM prompt templates
-    models/         - Data models
-    utils/          - Robust JSON parser (anti-hallucination)
-app/                - Expo React Native frontend
-components/         - UI components
-.env                - Local environment variables (gitignored, copy from .env.example)
-.env.example        - Template for environment variables
+    agent_flow.py       - Core async Plan-Act agent (AsyncGenerator)
+    db/
+      session_store.py  - MongoDB session persistence (motor async)
+      cache.py          - Redis session cache (aioredis)
+    services/
+      session_service.py - Session lifecycle orchestration (DDD Application layer)
+    tools/
+      browser.py        - Playwright + HTTP browser tools
+      shell.py          - Shell execution tools
+      file.py           - File system tools
+      search.py         - Web search tools
+      message.py        - User notification tools
+      mcp.py            - MCP protocol tools
+    prompts/            - LLM prompt templates
+    models/             - Pydantic data models (Plan, Step, Memory, etc.)
+    utils/              - Robust JSON parser
+app/                    - Expo React Native frontend
+components/             - UI components (AgentPlanView, AgentToolCard, etc.)
 ```
 
 ## API Endpoints
 
-- `GET /api/status` - Health check
-- `POST /api/chat` - Streaming chat (SSE) — Cloudflare Workers AI with streaming
-- `POST /api/agent` - Autonomous agent (SSE) — Python Plan-Act flow with real tool execution
+- `GET /api/status` — Health check
+- `POST /api/chat` — Streaming chat (SSE)
+- `POST /api/agent` — Async autonomous agent (SSE) with session_id
+- `GET /api/sessions` — List all sessions from MongoDB
+- `GET /api/sessions/:id` — Get session details
+- `POST /api/sessions/:id/resume` — Resume an interrupted session (SSE)
+- `POST /api/sessions/:id/rollback` — Rollback session to previous step
+- `GET /api/sessions/:id/events` — Get full event log for a session
+
+## Python Dependencies
+
+- `pydantic>=2.0.0` - Pydantic BaseModel data models
+- `motor>=3.7.0` - Async MongoDB driver (AsyncIOMotorClient)
+- `redis>=5.0.0` - Redis async client
+- `playwright>=1.40.0` - Real browser automation
+- `beautifulsoup4>=4.12.0` - HTML parsing
+- `aiohttp` - Async HTTP client
+- `requests` - Sync HTTP client
 
 ## Key Technical Notes
 
-### Cloudflare Workers AI Response Format
-- Non-streaming: `{"response": "...", "usage": {...}}` — no "result" wrapper
-- Streaming SSE: `data: {"response": "chunk", "p": "..."}` then `data: [DONE]`
-- Tool calls: `{"tool_calls": [{"name": "func", "arguments": {...}}]}`
-- Tool schema format: `{"name": "...", "description": "...", "parameters": {...}}` (no OpenAI wrapper)
+### Async Agent Flow (AsyncGenerator)
+The agent uses Python's `AsyncGenerator` pattern - events are yielded as they happen, enabling true real-time streaming without blocking.
 
-### Agent Event System
-- `type: "message"` — clean text sent to chat UI
-- `type: "tool"` — tool execution card (calling/called/error states)
-- `type: "thinking"` — subtle progress indicator (clean text only, no raw JSON)
-- `type: "plan"` — plan creation/updates
-- `type: "step"` — step execution status
-- Raw JSON is never forwarded to the chat UI
+### Session Persistence
+- **MongoDB Atlas**: Stores full session documents (plan, steps, events, metadata)
+- **Redis**: Fast cache for hot session state (TTL: 1 hour per session)
+- **Session ID**: Auto-generated UUID, returned in first SSE event
+
+### Cloudflare Workers AI Response Format
+- Non-streaming: `{"response": "...", "usage": {...}}`
+- Streaming SSE: `data: {"response": "chunk"}` then `data: [DONE]`
+- Tool calls: `{"tool_calls": [{"name": "func", "arguments": {...}}]}`
+
+### Agent Event Types
+- `type: "session"` — session_id assigned
+- `type: "plan"` — plan creating/created/running/updated/completed
+- `type: "step"` — step running/completed/failed
+- `type: "tool"` — tool calling/called/error
+- `type: "message_start/chunk/end"` — streaming text
+- `type: "done"` — agent finished

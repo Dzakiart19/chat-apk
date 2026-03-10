@@ -8,7 +8,7 @@ from typing import Optional, List
 from server.agent.models.tool_result import ToolResult
 
 
-def message_notify_user(text: str) -> ToolResult:
+def message_notify_user(text: str, attachments: Optional[List[str]] = None) -> ToolResult:
     """Send a progress notification to the user.
 
     Matching ai-manus message_notify_user tool interface.

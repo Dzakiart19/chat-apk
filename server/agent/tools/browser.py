@@ -1,23 +1,270 @@
 """
-Browser tools for Dzeck AI agent.
-Based on the official Dzeck function calls specification.
-Provides web browsing capabilities using HTTP requests.
-Note: Full browser automation (click/type/scroll) is provided as best-effort
-using HTTP-based navigation since Playwright is not available in this environment.
+Browser tools for Dzeck AI Agent.
+Upgraded to use Playwright for real browser automation when available.
+Falls back to HTTP-based browsing if Playwright is not installed.
+
+Real browser capabilities (Playwright):
+- JavaScript rendering
+- Real click/type/scroll interactions
+- Screenshot capture
+- Console log access
+- Form submissions
+
+Fallback (HTTP):
+- Basic HTML fetching and parsing
+- Link extraction
 """
 import re
-import json
 import os
+import json
+import asyncio
+import logging
 import urllib.request
 import urllib.parse
 import ssl
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from server.agent.models.tool_result import ToolResult
 
+logger = logging.getLogger(__name__)
 
-class BrowserSession:
-    """Browser session with page state tracking."""
+PLAYWRIGHT_ENABLED = os.environ.get("PLAYWRIGHT_ENABLED", "true").lower() == "true"
+
+_playwright_available = False
+_playwright = None
+_browser_instance = None
+_browser_page = None
+
+if PLAYWRIGHT_ENABLED:
+    try:
+        from playwright.sync_api import sync_playwright, Browser, Page, Playwright
+        _playwright_available = True
+        logger.info("[Browser] Playwright available - using real browser automation.")
+    except ImportError:
+        logger.warning("[Browser] Playwright not installed - using HTTP fallback.")
+
+
+class PlaywrightSession:
+    """Real browser session using Playwright."""
+
+    def __init__(self) -> None:
+        self._pw: Any = None
+        self._browser: Any = None
+        self._page: Any = None
+        self._started = False
+        self.current_url: Optional[str] = None
+        self.console_logs: List[str] = []
+
+    def start(self) -> bool:
+        """Start Playwright browser."""
+        if not _playwright_available:
+            return False
+        try:
+            from playwright.sync_api import sync_playwright
+            self._pw = sync_playwright().start()
+            self._browser = self._pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-background-networking",
+                ],
+            )
+            ctx = self._browser.new_context(
+                viewport={"width": 1280, "height": 720},
+                user_agent=(
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+            self._page = ctx.new_page()
+            self._page.on("console", lambda msg: self.console_logs.append(
+                f"[{msg.type}] {msg.text}"
+            ))
+            self._started = True
+            logger.info("[Browser] Playwright browser started.")
+            return True
+        except Exception as e:
+            logger.error("[Browser] Failed to start Playwright: %s", e)
+            return False
+
+    def navigate(self, url: str) -> ToolResult:
+        """Navigate to URL and return page content."""
+        if not self._started and not self.start():
+            return ToolResult(success=False, message="Playwright not available.")
+        try:
+            self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            self._page.wait_for_timeout(1000)
+            self.current_url = self._page.url
+            title = self._page.title()
+            content = self._page.inner_text("body")
+            content = content[:8000]
+            return ToolResult(
+                success=True,
+                message=f"Page: {title}\nURL: {self.current_url}\n\n{content}",
+                data={
+                    "url": self.current_url,
+                    "title": title,
+                    "content": content,
+                },
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Navigate failed: {e}",
+                              data={"error": str(e), "url": url})
+
+    def view(self) -> ToolResult:
+        """Get current page content."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            content = self._page.inner_text("body")[:8000]
+            title = self._page.title()
+            return ToolResult(
+                success=True,
+                message=f"Page: {title}\nURL: {self.current_url}\n\n{content}",
+                data={"url": self.current_url, "title": title, "content": content},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"View failed: {e}")
+
+    def click(self, x: float, y: float, button: str = "left") -> ToolResult:
+        """Real mouse click at coordinates."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            btn_map = {"left": "left", "right": "right", "middle": "middle"}
+            self._page.mouse.click(x, y, button=btn_map.get(button, "left"))
+            self._page.wait_for_timeout(500)
+            self.current_url = self._page.url
+            return ToolResult(
+                success=True,
+                message=f"Clicked at ({x}, {y}) with {button} button.",
+                data={"x": x, "y": y, "button": button, "url": self.current_url},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Click failed: {e}")
+
+    def type_text(self, text: str) -> ToolResult:
+        """Type text into focused element."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            self._page.keyboard.type(text)
+            return ToolResult(
+                success=True,
+                message=f"Typed: {repr(text)}",
+                data={"text": text},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Type failed: {e}")
+
+    def scroll(self, x: float, y: float, direction: str, amount: int = 3) -> ToolResult:
+        """Scroll the page."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            delta_y = amount * 200 if direction == "down" else -amount * 200
+            delta_x = amount * 200 if direction == "right" else (-amount * 200 if direction == "left" else 0)
+            self._page.mouse.wheel(delta_x, delta_y)
+            self._page.wait_for_timeout(300)
+            content = self._page.inner_text("body")[:4000]
+            return ToolResult(
+                success=True,
+                message=f"Scrolled {direction} by {amount}.\n\n{content}",
+                data={"direction": direction, "amount": amount},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Scroll failed: {e}")
+
+    def scroll_to_bottom(self, x: float = 0, y: float = 0) -> ToolResult:
+        """Scroll to bottom of page."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            self._page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            self._page.wait_for_timeout(500)
+            content = self._page.inner_text("body")[-4000:]
+            return ToolResult(
+                success=True,
+                message=f"Scrolled to bottom.\n\n{content}",
+                data={"content_bottom": content},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Scroll to bottom failed: {e}")
+
+    def read_links(self, max_links: int = 20) -> ToolResult:
+        """Get all links on the page."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            links_raw = self._page.evaluate("""
+                Array.from(document.querySelectorAll('a[href]'))
+                    .slice(0, 100)
+                    .map(a => ({url: a.href, text: a.innerText.trim().slice(0, 100)}))
+            """)
+            subset = links_raw[:max_links]
+            links_text = "\n".join(
+                f"[{i+1}] {l.get('text', '')} -> {l.get('url', '')}"
+                for i, l in enumerate(subset)
+            )
+            return ToolResult(
+                success=True,
+                message=f"Found {len(links_raw)} links (showing {len(subset)}):\n\n{links_text}",
+                data={"links": subset, "total": len(links_raw)},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Read links failed: {e}")
+
+    def console_view(self, max_lines: int = 100) -> ToolResult:
+        """View browser console logs."""
+        logs = self.console_logs[-max_lines:]
+        text = "\n".join(logs) if logs else "(No console logs)"
+        return ToolResult(
+            success=True,
+            message=f"Console logs:\n\n{text}",
+            data={"logs": logs},
+        )
+
+    def save_image(self, x: float, y: float, save_dir: str, base_name: str) -> ToolResult:
+        """Save screenshot of current page."""
+        if not self._started:
+            return ToolResult(success=False, message="No page loaded.")
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            path = os.path.join(save_dir, f"{base_name}.png")
+            self._page.screenshot(path=path, full_page=False)
+            return ToolResult(
+                success=True,
+                message=f"Screenshot saved to: {path}",
+                data={"save_path": path},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Save image failed: {e}")
+
+    def restart(self, url: str = "") -> ToolResult:
+        """Restart browser session."""
+        self.close()
+        self.__init__()
+        if url:
+            return self.navigate(url)
+        return ToolResult(success=True, message="Browser restarted.")
+
+    def close(self) -> None:
+        """Close Playwright browser."""
+        try:
+            if self._browser:
+                self._browser.close()
+            if self._pw:
+                self._pw.stop()
+        except Exception:
+            pass
+        self._started = False
+
+
+class HTTPBrowserSession:
+    """HTTP-based browser fallback (no JavaScript)."""
 
     def __init__(self) -> None:
         self.current_url: Optional[str] = None
@@ -29,7 +276,6 @@ class BrowserSession:
         self.console_logs: list = []
 
     def navigate(self, url: str) -> ToolResult:
-        """Navigate to a URL and get page content."""
         try:
             ctx = ssl.create_default_context()
             req = urllib.request.Request(
@@ -41,7 +287,6 @@ class BrowserSession:
                     "Accept-Language": "en-US,en;q=0.9",
                 },
             )
-
             with urllib.request.urlopen(req, context=ctx, timeout=20) as response:
                 content_type = response.headers.get("Content-Type", "")
                 if "text" not in content_type and "html" not in content_type:
@@ -52,23 +297,15 @@ class BrowserSession:
                     )
                 self.current_html = response.read().decode("utf-8", errors="replace")
 
-            # Extract title
-            title_match = re.search(
-                r"<title[^>]*>(.*?)</title>", self.current_html,
-                re.DOTALL | re.IGNORECASE
-            )
+            title_match = re.search(r"<title[^>]*>(.*?)</title>", self.current_html,
+                                    re.DOTALL | re.IGNORECASE)
             self.current_title = (
                 re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
                 if title_match else ""
             )
-
-            # Extract links
             self.links = self._extract_links(self.current_html, url)
-
-            # Convert to readable text
             self.current_content = self._html_to_text(self.current_html)
             self.current_url = url
-
             if url not in self.history:
                 self.history.append(url)
 
@@ -78,7 +315,6 @@ class BrowserSession:
                 if len(self.current_content) > max_chars
                 else self.current_content
             )
-
             return ToolResult(
                 success=True,
                 message=f"Page: {self.current_title}\nURL: {url}\n\n{display}",
@@ -89,255 +325,119 @@ class BrowserSession:
                     "links_count": len(self.links),
                 },
             )
-
         except Exception as e:
-            return ToolResult(
-                success=False,
-                message=f"Failed to navigate to {url}: {str(e)}",
-                data={"error": str(e), "url": url},
-            )
+            return ToolResult(success=False, message=f"Failed to navigate to {url}: {e}",
+                              data={"error": str(e), "url": url})
 
     def view(self) -> ToolResult:
-        """Get current page content."""
         if not self.current_url:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
+            return ToolResult(success=False, message="No page loaded. Use browser_navigate first.")
         content = self.current_content[:8000]
         return ToolResult(
             success=True,
             message=f"Current page: {self.current_title}\nURL: {self.current_url}\n\n{content}",
-            data={
-                "url": self.current_url,
-                "title": self.current_title,
-                "content": content,
-                "links_count": len(self.links),
-            },
+            data={"url": self.current_url, "title": self.current_title, "content": content},
         )
 
-    def click(self, coordinate_x: float, coordinate_y: float,
-              button: str = "left") -> ToolResult:
-        """Simulate a click - extracts link near the given coordinates (best-effort).
-
-        Since we use HTTP requests (not a real browser), clicking on a link
-        means navigating to the URL closest to the given coordinates in the page.
-
-        Args:
-            coordinate_x: Horizontal coordinate
-            coordinate_y: Vertical coordinate
-            button: Mouse button ('left', 'right', 'middle')
-        """
+    def click(self, x: float, y: float, button: str = "left") -> ToolResult:
         if not self.current_url:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
-
-        # If we have links, try to navigate to the first one as a proxy for click
-        # Real click coordinates can't be resolved without a browser engine
+            return ToolResult(success=False, message="No page loaded.")
         if self.links:
-            # Use link index as a rough proxy for vertical position
-            link_idx = max(0, min(int(coordinate_y / 100), len(self.links) - 1))
-            target_url = self.links[link_idx].get("url", "")
-            if target_url:
-                return self.navigate(target_url)
-
+            idx = max(0, min(int(y / 100), len(self.links) - 1))
+            target = self.links[idx].get("url", "")
+            if target:
+                return self.navigate(target)
         return ToolResult(
             success=True,
-            message=f"Click simulated at ({coordinate_x}, {coordinate_y}) with {button} button. "
-                    "No navigable link found at position; page content unchanged.",
-            data={"coordinate_x": coordinate_x, "coordinate_y": coordinate_y, "button": button},
+            message=f"Click simulated at ({x}, {y}). No navigable link found.",
+            data={"x": x, "y": y},
         )
 
     def type_text(self, text: str) -> ToolResult:
-        """Simulate typing text (best-effort - logs the action).
+        self.console_logs.append(f"[type] {text}")
+        return ToolResult(success=True, message=f"Typed: {repr(text)}", data={"text": text})
 
-        Args:
-            text: Text to type into the currently focused element
-        """
-        self.console_logs.append(f"[type] Typed: {text}")
-        return ToolResult(
-            success=True,
-            message=f"Typed text: {repr(text)}",
-            data={"text": text},
-        )
-
-    def scroll(self, coordinate_x: float, coordinate_y: float,
-               direction: str, amount: int = 3) -> ToolResult:
-        """Simulate scrolling (best-effort - shows more content).
-
-        Args:
-            coordinate_x: Horizontal coordinate
-            coordinate_y: Vertical coordinate
-            direction: Scroll direction ('up', 'down', 'left', 'right')
-            amount: Number of scroll units (default 3)
-        """
+    def scroll(self, x: float, y: float, direction: str, amount: int = 3) -> ToolResult:
         if not self.current_url:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
-
+            return ToolResult(success=False, message="No page loaded.")
         content = self.current_content
-        total = len(content)
         chunk = 2000 * amount
-
         if direction == "down":
-            offset = min(int(coordinate_y * 10) + chunk, total)
+            offset = min(int(y * 10) + chunk, len(content))
             snippet = content[max(0, offset - 4000):offset]
         else:
             snippet = content[:4000]
-
         return ToolResult(
             success=True,
-            message=f"Scrolled {direction} by {amount} units.\n\n{snippet}",
-            data={
-                "direction": direction,
-                "amount": amount,
-                "content_snippet": snippet[:2000],
-            },
+            message=f"Scrolled {direction}.\n\n{snippet}",
+            data={"direction": direction},
         )
 
-    def scroll_to_bottom(self, coordinate_x: float = 0,
-                          coordinate_y: float = 0) -> ToolResult:
-        """Scroll to the bottom of the page to load all content."""
+    def scroll_to_bottom(self, x: float = 0, y: float = 0) -> ToolResult:
         if not self.current_url:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
-
-        content = self.current_content
-        bottom_content = content[-4000:] if len(content) > 4000 else content
-        return ToolResult(
-            success=True,
-            message=f"Scrolled to bottom of page.\n\n{bottom_content}",
-            data={"content_bottom": bottom_content},
-        )
+            return ToolResult(success=False, message="No page loaded.")
+        bottom = self.current_content[-4000:]
+        return ToolResult(success=True, message=f"Scrolled to bottom.\n\n{bottom}",
+                          data={"content_bottom": bottom})
 
     def read_links(self, max_links: int = 20) -> ToolResult:
-        """Get all links from the current page.
-
-        Args:
-            max_links: Maximum number of links to return (default 20)
-        """
         if not self.current_url:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
-
-        links_subset = self.links[:max_links]
-        links_text = "\n".join(
-            f"[{i+1}] {l.get('text', '')} -> {l.get('url', '')}"
-            for i, l in enumerate(links_subset)
+            return ToolResult(success=False, message="No page loaded.")
+        subset = self.links[:max_links]
+        text = "\n".join(
+            f"[{i+1}] {l.get('text','')} -> {l.get('url','')}"
+            for i, l in enumerate(subset)
         )
-
         return ToolResult(
             success=True,
-            message=f"Found {len(self.links)} links (showing {len(links_subset)}):\n\n{links_text}",
-            data={"links": links_subset, "total": len(self.links)},
+            message=f"Found {len(self.links)} links:\n\n{text}",
+            data={"links": subset, "total": len(self.links)},
         )
 
     def console_view(self, max_lines: int = 100) -> ToolResult:
-        """View browser console logs.
-
-        Args:
-            max_lines: Maximum number of log lines to return (default 100)
-        """
         logs = self.console_logs[-max_lines:]
-        logs_text = "\n".join(logs) if logs else "(No console logs)"
-        return ToolResult(
-            success=True,
-            message=f"Browser console logs (last {max_lines}):\n\n{logs_text}",
-            data={"logs": logs, "total": len(self.console_logs)},
-        )
+        text = "\n".join(logs) if logs else "(No console logs)"
+        return ToolResult(success=True, message=f"Console:\n\n{text}", data={"logs": logs})
 
-    def save_image(self, coordinate_x: float, coordinate_y: float,
-                   save_dir: str, base_name: str) -> ToolResult:
-        """Save an image from the current page to a local file.
-
-        Extracts image URLs from the page and downloads one near the given coordinates.
-
-        Args:
-            coordinate_x: Horizontal coordinate of the image element
-            coordinate_y: Vertical coordinate of the image element
-            save_dir: Local directory to save the image file
-            base_name: Base name for the image file (without extension)
-        """
+    def save_image(self, x: float, y: float, save_dir: str, base_name: str) -> ToolResult:
         if not self.current_html:
-            return ToolResult(
-                success=False,
-                message="No page loaded. Use browser_navigate first.",
-            )
-
-        # Find image URLs in the HTML
-        img_pattern = re.compile(
-            r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE
-        )
+            return ToolResult(success=False, message="No page loaded.")
+        img_pattern = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
         images = [m.group(1) for m in img_pattern.finditer(self.current_html)]
-
         if not images:
-            return ToolResult(
-                success=False,
-                message="No images found on the current page.",
-                data={"coordinate_x": coordinate_x, "coordinate_y": coordinate_y},
-            )
-
-        # Pick image closest to coordinates (use index as rough proxy)
-        img_idx = max(0, min(int(coordinate_y / 100), len(images) - 1))
-        img_url = images[img_idx]
-
-        # Resolve relative URLs
+            return ToolResult(success=False, message="No images found.")
+        idx = max(0, min(int(y / 100), len(images) - 1))
+        img_url = images[idx]
         if img_url.startswith("//"):
             img_url = "https:" + img_url
         elif img_url.startswith("/") and self.current_url:
-            from urllib.parse import urlparse
-            parsed = urlparse(self.current_url)
+            parsed = urllib.parse.urlparse(self.current_url)
             img_url = f"{parsed.scheme}://{parsed.netloc}{img_url}"
-
         try:
             os.makedirs(save_dir, exist_ok=True)
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(
-                img_url,
-                headers={"User-Agent": "Mozilla/5.0 Chrome/120.0.0.0"},
-            )
-
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
-                content_type = resp.headers.get("Content-Type", "image/jpeg")
+            with urllib.request.urlopen(
+                urllib.request.Request(img_url, headers={"User-Agent": "Mozilla/5.0"}),
+                context=ctx, timeout=15
+            ) as resp:
+                ct = resp.headers.get("Content-Type", "image/jpeg")
                 data = resp.read()
-
-            ext = "jpg"
-            if "png" in content_type:
-                ext = "png"
-            elif "gif" in content_type:
-                ext = "gif"
-            elif "webp" in content_type:
-                ext = "webp"
-            elif "svg" in content_type:
-                ext = "svg"
-
-            save_path = os.path.join(save_dir, f"{base_name}.{ext}")
-            with open(save_path, "wb") as f:
+            ext = "png" if "png" in ct else "gif" if "gif" in ct else "webp" if "webp" in ct else "jpg"
+            path = os.path.join(save_dir, f"{base_name}.{ext}")
+            with open(path, "wb") as f:
                 f.write(data)
-
-            return ToolResult(
-                success=True,
-                message=f"Image saved to: {save_path} ({len(data)} bytes)",
-                data={"save_path": save_path, "url": img_url, "size": len(data)},
-            )
-
+            return ToolResult(success=True, message=f"Image saved to: {path}",
+                              data={"save_path": path, "url": img_url})
         except Exception as e:
-            return ToolResult(
-                success=False,
-                message=f"Failed to save image: {str(e)}",
-                data={"error": str(e), "url": img_url},
-            )
+            return ToolResult(success=False, message=f"Failed to save image: {e}")
+
+    def restart(self, url: str = "") -> ToolResult:
+        self.__init__()
+        if url:
+            return self.navigate(url)
+        return ToolResult(success=True, message="Browser session restarted.")
 
     def _extract_links(self, html: str, base_url: str) -> list:
-        """Extract all links from HTML."""
         links = []
         pattern = re.compile(
             r'<a[^>]+href=["\']([^"\'#][^"\']*)["\'][^>]*>(.*?)</a>',
@@ -347,131 +447,94 @@ class BrowserSession:
         for match in pattern.finditer(html):
             href = match.group(1).strip()
             text = re.sub(r"<[^>]+>", "", match.group(2)).strip()
-
-            # Resolve relative URLs
             if href.startswith("//"):
                 href = "https:" + href
             elif href.startswith("/") and base_url:
-                from urllib.parse import urlparse
-                parsed = urlparse(base_url)
+                parsed = urllib.parse.urlparse(base_url)
                 href = f"{parsed.scheme}://{parsed.netloc}{href}"
             elif not href.startswith("http"):
                 continue
-
             if href not in seen and len(links) < 100:
                 seen.add(href)
                 links.append({"url": href, "text": text[:100]})
-
         return links
 
     def _html_to_text(self, html: str) -> str:
-        """Convert HTML to clean readable text."""
         html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r"<!--.*?-->", "", html, flags=re.DOTALL)
-        html = re.sub(r"<(?:br|p|div|h[1-6]|li|tr|section|article)[^>]*>", "\n", html, flags=re.IGNORECASE)
+        html = re.sub(
+            r"<(?:br|p|div|h[1-6]|li|tr|section|article)[^>]*>", "\n", html,
+            flags=re.IGNORECASE,
+        )
         text = re.sub(r"<[^>]+>", "", html)
-        text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        text = text.replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " ")
-        lines = [line.strip() for line in text.split("\n")]
-        lines = [line for line in lines if line]
+        text = (text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " "))
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
         return "\n".join(lines)
 
 
-# ─── Global browser session ─────────────────────────────────────────
+def _make_session() -> Any:
+    """Create the best available browser session."""
+    if _playwright_available and PLAYWRIGHT_ENABLED:
+        sess = PlaywrightSession()
+        if sess.start():
+            return sess
+        logger.warning("[Browser] Playwright start failed, falling back to HTTP.")
+    return HTTPBrowserSession()
 
-_browser = BrowserSession()
+
+_browser = _make_session()
+
+
+def _reset_browser() -> None:
+    global _browser
+    _browser = _make_session()
 
 
 def browser_navigate(url: str) -> ToolResult:
-    """Navigate to a URL and get page content."""
     return _browser.navigate(url)
 
 
 def browser_view() -> ToolResult:
-    """Get the current page content and visible elements."""
     return _browser.view()
 
 
-def browser_click(coordinate_x: float, coordinate_y: float,
-                  button: str = "left") -> ToolResult:
-    """Click on an element at the given coordinates (best-effort via link navigation).
-
-    Args:
-        coordinate_x: Horizontal coordinate relative to viewport left edge
-        coordinate_y: Vertical coordinate relative to viewport top edge
-        button: Mouse button to use ('left', 'right', 'middle')
-    """
+def browser_click(coordinate_x: float, coordinate_y: float, button: str = "left") -> ToolResult:
     return _browser.click(coordinate_x, coordinate_y, button)
 
 
 def browser_type(text: str) -> ToolResult:
-    """Type text into the currently focused browser element.
-
-    Args:
-        text: Text to type
-    """
     return _browser.type_text(text)
 
 
 def browser_scroll(coordinate_x: float, coordinate_y: float,
                    direction: str, amount: int = 3) -> ToolResult:
-    """Scroll the browser page.
-
-    Args:
-        coordinate_x: Horizontal coordinate of scroll position
-        coordinate_y: Vertical coordinate of scroll position
-        direction: Scroll direction ('up', 'down', 'left', 'right')
-        amount: Number of scroll units (default 3)
-    """
     return _browser.scroll(coordinate_x, coordinate_y, direction, amount)
 
 
-def browser_scroll_to_bottom(coordinate_x: float = 0,
-                              coordinate_y: float = 0) -> ToolResult:
-    """Scroll to the bottom of the current page to load all content."""
+def browser_scroll_to_bottom(coordinate_x: float = 0, coordinate_y: float = 0) -> ToolResult:
     return _browser.scroll_to_bottom(coordinate_x, coordinate_y)
 
 
 def browser_read_links(max_links: int = 20) -> ToolResult:
-    """Get all links from the current page.
-
-    Args:
-        max_links: Maximum number of links to return (default 20)
-    """
     return _browser.read_links(max_links)
 
 
 def browser_console_view(max_lines: int = 100) -> ToolResult:
-    """View browser console logs.
-
-    Args:
-        max_lines: Maximum number of log lines to return (default 100)
-    """
     return _browser.console_view(max_lines)
 
 
 def browser_restart(url: str = "") -> ToolResult:
-    """Restart the browser session and clear all state.
-
-    Args:
-        url: Optional URL to navigate to after restart
-    """
     global _browser
-    _browser = BrowserSession()
+    if hasattr(_browser, "close"):
+        _browser.close()
+    _browser = _make_session()
     if url:
         return _browser.navigate(url)
-    return ToolResult(success=True, message="Browser session restarted and cleared.")
+    return ToolResult(success=True, message="Browser restarted.")
 
 
 def browser_save_image(coordinate_x: float, coordinate_y: float,
                        save_dir: str, base_name: str) -> ToolResult:
-    """Save an image from the current browser page to a local file.
-
-    Args:
-        coordinate_x: Horizontal coordinate of the image element
-        coordinate_y: Vertical coordinate of the image element
-        save_dir: Local directory to save the image file (absolute path)
-        base_name: Base name for the image file (without extension)
-    """
     return _browser.save_image(coordinate_x, coordinate_y, save_dir, base_name)
