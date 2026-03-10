@@ -8,305 +8,349 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#0A0A0C;
-      --surface:#111116;
-      --surface2:#18181f;
-      --surface3:#1e1e28;
-      --border:#252530;
-      --border2:#2e2e3e;
-      --accent:#6C5CE7;
-      --accent2:#8B7CF8;
-      --accent-glow:rgba(108,92,231,0.18);
-      --text:#E8E8F0;
-      --muted:#6E6E82;
-      --muted2:#9090A8;
-      --user-bubble:#1A1730;
-      --success:#30D158;
-      --error:#FF453A;
-      --warning:#FF9F0A;
-      --blue:#0A84FF;
+      --bg:#f5f5f5;
+      --bg-dark:#0d0d0f;
+      --surface:#ffffff;
+      --surface2:#f7f7f8;
+      --surface3:#efefef;
+      --border:#e5e5e7;
+      --border2:#d1d1d6;
+      --accent:#1a73e8;
+      --accent2:#4285f4;
+      --text:#1c1c1e;
+      --text2:#3c3c43;
+      --muted:#8e8e93;
+      --muted2:#6c6c70;
+      --user-bubble:#f0f0f0;
+      --ai-icon-bg:#1a1a2e;
+      --success:#34c759;
+      --error:#ff3b30;
+      --warning:#ff9500;
+      --pill-bg:#f2f2f7;
+      --pill-border:#e5e5ea;
+      --shadow:0 1px 3px rgba(0,0,0,.08),0 0 1px rgba(0,0,0,.04);
+      --shadow-lg:0 8px 32px rgba(0,0,0,.08),0 0 1px rgba(0,0,0,.06);
     }
-    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+    @media(prefers-color-scheme:dark){
+      :root{
+        --bg:#0d0d0f;
+        --surface:#1c1c1e;
+        --surface2:#2c2c2e;
+        --surface3:#3a3a3c;
+        --border:#2c2c2e;
+        --border2:#3a3a3c;
+        --text:#f2f2f7;
+        --text2:#aeaeb2;
+        --muted:#636366;
+        --muted2:#48484a;
+        --user-bubble:#1c1c2e;
+        --pill-bg:#2c2c2e;
+        --pill-border:#3a3a3c;
+        --shadow:0 1px 3px rgba(0,0,0,.4),0 0 1px rgba(0,0,0,.3);
+        --shadow-lg:0 8px 32px rgba(0,0,0,.4),0 0 1px rgba(0,0,0,.3);
+      }
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6;overflow:hidden}
 
-    /* ── Layout ── */
-    #app{display:flex;flex-direction:column;height:100dvh;max-width:900px;margin:0 auto;position:relative}
+    /* ── Split Layout ── */
+    #app{display:flex;height:100dvh;position:relative;overflow:hidden}
+    #chat-side{flex:1;display:flex;flex-direction:column;min-width:0;transition:flex .25s ease;height:100%}
+    #tool-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100%}
+    #tool-panel.open{width:50%;min-width:320px}
+    @media(max-width:700px){
+      #tool-panel.open{position:fixed;inset:0;width:100%;z-index:100;border-left:none}
+    }
 
     /* ── Header ── */
-    header{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;z-index:10}
-    .logo-wrap{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
-    .logo-wrap img{width:32px;height:32px;object-fit:cover;border-radius:9px}
-    .logo-wrap svg{width:16px;height:16px;fill:#fff}
-    .header-info{flex:1}
-    .header-title{font-size:15px;font-weight:600;color:var(--text)}
-    .header-sub{font-size:11px;color:var(--muted)}
-    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0}
+    header{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+    .logo-wrap{width:28px;height:28px;border-radius:8px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+    .logo-wrap img{width:28px;height:28px;object-fit:cover;border-radius:8px}
+    .logo-wrap svg{width:14px;height:14px;fill:#fff}
+    .header-title{font-size:15px;font-weight:600;color:var(--text);flex:1}
+    .header-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+    .header-btn:hover{background:var(--surface3)}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
 
     /* ── Chat area ── */
-    #chat-area{flex:1;overflow-y:auto;padding:20px 18px 12px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+    #chat-area{flex:1;overflow-y:auto;padding:24px 0 12px;display:flex;flex-direction:column;gap:0;scroll-behavior:smooth}
     #chat-area::-webkit-scrollbar{width:3px}
     #chat-area::-webkit-scrollbar-track{background:transparent}
-    #chat-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    #chat-area::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
     /* ── Empty State ── */
-    #empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;color:var(--muted);text-align:center;padding:40px 20px}
-    .empty-logo{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(108,92,231,0.3);overflow:hidden}
-    .empty-logo img{width:64px;height:64px;object-fit:cover;border-radius:20px}
-    .empty-logo svg{width:28px;height:28px;fill:#fff}
-    #empty-state h2{font-size:22px;font-weight:700;color:var(--text)}
-    #empty-state p{font-size:13px;max-width:300px;color:var(--muted2)}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
-    .chip{padding:8px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;font-size:12px;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
-    .chip:hover{border-color:var(--accent);background:var(--accent-glow)}
+    #empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;color:var(--muted);text-align:center;padding:40px 20px}
+    .empty-logo{width:56px;height:56px;border-radius:16px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .empty-logo img{width:56px;height:56px;object-fit:cover;border-radius:16px}
+    .empty-logo svg{width:24px;height:24px;fill:#fff}
+    #empty-state h2{font-size:20px;font-weight:700;color:var(--text)}
+    #empty-state p{font-size:13px;max-width:280px;color:var(--muted2)}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}
+    .chip{padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:12.5px;color:var(--text2);cursor:pointer;transition:border-color .15s,background .15s;box-shadow:var(--shadow)}
+    .chip:hover{border-color:var(--accent2);background:var(--surface2)}
 
-    /* ── Messages ── */
-    .msg{display:flex;gap:10px;max-width:100%;animation:fadeIn .2s ease}
-    .msg.user{flex-direction:row-reverse}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    .avatar{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:600;overflow:hidden}
-    .avatar.ai{background:linear-gradient(135deg,var(--accent),var(--accent2))}
-    .avatar.ai img{width:30px;height:30px;object-fit:cover}
-    .avatar.ai svg{width:14px;height:14px;fill:#fff}
-    .avatar.user{background:var(--surface3);color:var(--muted2)}
-    .bubble{max-width:min(660px,calc(100% - 42px));padding:11px 15px;border-radius:16px;font-size:13.5px;line-height:1.7;word-break:break-word}
-    .msg.user .bubble{background:var(--user-bubble);border:1px solid rgba(108,92,231,.2);border-bottom-right-radius:4px}
-    .msg.ai .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
-    .bubble p{margin-bottom:8px}.bubble p:last-child{margin-bottom:0}
-    .bubble code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px;font-size:12px;font-family:"JetBrains Mono",Menlo,monospace}
-    .bubble pre{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
-    .bubble pre code{background:none;padding:0}
-    .bubble strong{color:#fff}.bubble ul,.bubble ol{padding-left:18px;margin:6px 0}.bubble li{margin:3px 0}
+    /* ── Chat item wrapper ── */
+    .chat-item{padding:3px 20px;width:100%;max-width:780px;margin:0 auto}
+
+    /* ── User message ── */
+    .msg-user{display:flex;justify-content:flex-end;padding:4px 20px;margin-bottom:2px;animation:fadeIn .2s ease}
+    .msg-user-bubble{max-width:min(520px,85%);padding:10px 14px;border-radius:16px;border-bottom-right-radius:4px;background:var(--user-bubble);border:1px solid var(--border);font-size:14px;line-height:1.65;color:var(--text);word-break:break-word}
+    @media(prefers-color-scheme:dark){.msg-user-bubble{border:none}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── AI message ── */
+    .msg-ai{display:flex;flex-direction:column;gap:4px;padding:8px 20px 4px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .2s ease}
+    .msg-ai-header{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+    .ai-avatar{width:24px;height:24px;border-radius:7px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+    .ai-avatar img{width:24px;height:24px;object-fit:cover;border-radius:7px}
+    .ai-avatar svg{width:12px;height:12px;fill:#fff}
+    .ai-name{font-size:13px;font-weight:600;color:var(--text)}
+    .ai-body{font-size:14px;line-height:1.7;color:var(--text);word-break:break-word}
+    .ai-body p{margin-bottom:8px}.ai-body p:last-child{margin-bottom:0}
+    .ai-body code{background:var(--pill-bg);padding:1px 5px;border-radius:4px;font-size:12px;font-family:"JetBrains Mono",Menlo,monospace}
+    .ai-body pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
+    .ai-body pre code{background:none;padding:0}
+    .ai-body strong{color:var(--text)}.ai-body ul,.ai-body ol{padding-left:18px;margin:6px 0}.ai-body li{margin:3px 0}
+    .ai-body a{color:var(--accent2);text-decoration:underline}
 
     /* typing cursor */
-    .cursor{display:inline-block;width:2px;height:14px;background:var(--accent2);margin-left:2px;vertical-align:middle;animation:blink .9s step-end infinite}
+    .cursor{display:inline-block;width:2px;height:14px;background:var(--muted);margin-left:2px;vertical-align:middle;animation:blink .9s step-end infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
     /* Typing indicator */
-    .typing-indicator{display:flex;align-items:center;gap:4px;padding:12px 15px}
-    .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:bounce 1.2s ease-in-out infinite}
+    .typing-dots{display:flex;align-items:center;gap:4px;padding:4px 0}
+    .typing-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce 1.2s ease-in-out infinite}
     .typing-dot:nth-child(2){animation-delay:.2s}
     .typing-dot:nth-child(3){animation-delay:.4s}
-    @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+    @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
 
-    /* ── Plan Card ── */
-    .plan-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;width:100%;animation:fadeIn .25s ease}
-    .plan-card-header{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--border);background:var(--surface2)}
-    .plan-icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .plan-icon svg{width:13px;height:13px;fill:#fff}
-    .plan-title-text{flex:1;font-size:13px;font-weight:600;color:var(--text)}
-    .plan-count{font-size:11px;color:var(--muted);padding:3px 8px;background:var(--surface3);border-radius:12px}
-    .plan-steps-list{padding:4px 0}
+    /* ── Think text (agent planning) ── */
+    .msg-think{padding:2px 20px 6px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .2s ease}
+    .think-text{font-size:13px;color:var(--muted2);line-height:1.5}
 
-    /* ── Step Row ── */
-    .step-row{border-bottom:1px solid var(--border)}
-    .step-row:last-child{border-bottom:none}
-    .step-header{display:flex;align-items:center;gap:10px;padding:10px 15px;cursor:pointer;transition:background .12s;user-select:none}
-    .step-header:hover{background:var(--surface2)}
-    .step-status{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .step-status.pending{border:1.5px solid var(--border2)}
-    .step-status.running{border:2px solid var(--warning);animation:pulse-ring 1.4s ease infinite}
-    .step-status.completed{background:var(--success)}
-    .step-status.failed{background:var(--error)}
-    @keyframes pulse-ring{0%,100%{box-shadow:0 0 0 0 rgba(255,159,10,.4)}50%{box-shadow:0 0 0 5px rgba(255,159,10,0)}}
-    .step-status svg{width:10px;height:10px;fill:#fff}
-    .step-status .spin{width:10px;height:10px;border:1.5px solid var(--warning);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+    /* ── Step row ── */
+    .msg-step{padding:2px 20px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .15s ease}
+    .step-row-inner{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;user-select:none;border-radius:8px;transition:background .1s}
+    .step-row-inner:hover{background:var(--surface2)}
+    .step-status-ico{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid var(--border2)}
+    .step-status-ico.pending{}
+    .step-status-ico.running{border-color:var(--warning);border-top-color:transparent;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .step-name{flex:1;font-size:13px;color:var(--text)}
-    .step-name.muted{color:var(--muted)}
-    .step-toggle{font-size:11px;color:var(--muted);transition:transform .2s}
-    .step-toggle.open{transform:rotate(90deg)}
+    .step-status-ico.completed{background:var(--muted2);border-color:var(--muted2)}
+    .step-status-ico.failed{background:var(--error);border-color:var(--error)}
+    .step-check-svg{width:9px;height:9px;display:block}
+    .step-desc{flex:1;font-size:13.5px;color:var(--text2);font-weight:500;line-height:1.4;transition:color .15s}
+    .step-desc.done{color:var(--muted)}
+    .step-chevron{font-size:11px;color:var(--muted);transition:transform .2s}
+    .step-chevron.open{transform:rotate(90deg)}
+    .step-tools-wrap{padding:4px 0 4px 24px;display:none;flex-direction:column;gap:4px}
+    .step-tools-wrap.open{display:flex}
 
-    /* ── Tool items (under a step) ── */
-    .step-tools{padding:0 15px 8px 44px;display:none;flex-direction:column;gap:4px}
-    .step-tools.open{display:flex}
-    .tool-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:border-color .15s}
-    .tool-item.calling{border-color:rgba(255,159,10,.3)}
-    .tool-item.called{border-color:rgba(48,209,88,.2)}
-    .tool-item.error{border-color:rgba(255,69,58,.3)}
-    .tool-icon-wrap{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
-    .tool-icon-wrap.browser{background:rgba(10,132,255,.15)}
-    .tool-icon-wrap.shell{background:rgba(255,159,10,.12)}
-    .tool-icon-wrap.search{background:rgba(48,209,88,.12)}
-    .tool-icon-wrap.file{background:rgba(108,92,231,.15)}
-    .tool-icon-wrap.mcp{background:rgba(255,69,58,.12)}
-    .tool-icon-wrap.message{background:rgba(108,92,231,.15)}
-    .tool-icon-wrap.default{background:var(--surface3)}
-    .tool-label{flex:1;min-width:0}
-    .tool-name{font-size:12px;font-weight:500;color:var(--text)}
-    .tool-desc{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
-    .tool-status-icon{flex-shrink:0;font-size:12px}
-    .tool-status-icon .spin{width:12px;height:12px;border:1.5px solid var(--warning);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+    /* ── Tool chip (Manus pill style) ── */
+    .tool-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 12px 4px 8px;border:1px solid var(--pill-border);border-radius:999px;background:var(--pill-bg);cursor:pointer;max-width:100%;transition:border-color .15s,background .15s;animation:fadeIn .15s ease}
+    .tool-chip:hover{border-color:var(--border2);background:var(--surface3)}
+    .tool-chip-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text2)}
+    .tool-chip-fn{font-size:13px;color:var(--text2);white-space:nowrap;flex-shrink:0}
+    .tool-chip-arg{font-size:12px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tool-chip-status{font-size:12px;margin-left:2px;flex-shrink:0}
+    .tool-chip-spin{width:12px;height:12px;border:1.5px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+    .tool-chip.calling .tool-chip-fn,.tool-chip.calling .tool-chip-arg{opacity:.7}
+    .tool-chip.called .tool-chip-status{color:var(--muted)}
+    .tool-chip.error .tool-chip-fn,.tool-chip.error .tool-chip-arg{color:var(--error);opacity:.9}
 
-    /* expandable tool result */
-    .tool-result-area{display:none;padding:6px 0 0 0}
-    .tool-result-text{font-size:11px;color:var(--muted2);background:rgba(0,0,0,.3);border-radius:6px;padding:6px 8px;max-height:100px;overflow-y:auto;font-family:monospace;white-space:pre-wrap;word-break:break-all}
-    .tool-screenshot{width:100%;border-radius:6px;margin-top:4px;border:1px solid var(--border);max-height:200px;object-fit:contain;cursor:pointer}
+    /* ── Tool screenshot inline ── */
+    .tool-screenshot-inline{margin:6px 0 2px 24px;border-radius:8px;overflow:hidden;border:1px solid var(--border);max-width:400px;cursor:pointer;display:block}
+    .tool-screenshot-inline img{width:100%;display:block;max-height:200px;object-fit:cover}
 
-    /* ── Computer Panel (fixed bottom) ── */
-    #computer-panel{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:900px;background:var(--surface);border:1px solid var(--border2);border-bottom:none;border-radius:16px 16px 0 0;z-index:50;box-shadow:0 -4px 32px rgba(0,0,0,.6);transition:all .3s ease;display:none}
-    #computer-panel.visible{display:block}
-    #computer-panel.collapsed .computer-body{display:none}
-    #computer-panel.fullscreen{position:fixed;inset:0;max-width:100%;border-radius:0;border:none;z-index:200;transform:none;left:0}
-    #computer-panel.fullscreen .computer-body{height:calc(100vh - 48px);overflow:auto}
-    #computer-panel.fullscreen #browser-screen{max-height:calc(100vh - 160px)}
-    #computer-handle{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
-    .computer-drag-bar{width:32px;height:3px;background:var(--border2);border-radius:3px;flex-shrink:0}
-    .computer-handle-info{flex:1;min-width:0}
-    .computer-handle-title{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
-    .computer-handle-title .live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:livePulse 1.5s ease infinite}
-    @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
-    .computer-handle-task{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
-    .computer-chevron{font-size:12px;color:var(--muted);transition:transform .25s}
-    #computer-panel.collapsed .computer-chevron{transform:rotate(180deg)}
-    .computer-handle-actions{display:flex;align-items:center;gap:8px}
-    .computer-action-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:background .15s,color .15s;flex-shrink:0}
-    .computer-action-btn:hover{background:var(--surface3);color:var(--text)}
-    .computer-body{padding:0}
-    .computer-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 16px;gap:0}
-    .ctab{padding:8px 14px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
-    .ctab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
-    .ctab-content{display:none;padding:12px 16px}
-    .ctab-content.active{display:block}
-
-    /* Browser tab */
-    #browser-urlbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
-    #browser-urlbar svg{width:12px;height:12px;fill:var(--muted);flex-shrink:0}
-    #browser-url-text{font-size:11px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    #browser-screen{width:100%;border-radius:8px;border:1px solid var(--border);display:block;max-height:220px;object-fit:contain;background:var(--surface2)}
-    #browser-empty-msg{text-align:center;padding:30px;color:var(--muted);font-size:12px}
-
-    /* Plan tab */
-    .perencana-header{font-size:12px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-    .plan-step-overview{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
-    .plan-step-overview:last-child{border-bottom:none}
-    .plan-step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;border:1.5px solid var(--border2);color:var(--muted)}
-    .plan-step-num.done{background:var(--success);border-color:var(--success);color:#fff}
-    .plan-step-num.running{border-color:var(--warning);color:var(--warning)}
-    .plan-step-num.failed{background:var(--error);border-color:var(--error);color:#fff}
-    .plan-step-desc{flex:1;font-size:12px;color:var(--text);line-height:1.4}
-    .plan-step-desc.done{color:var(--muted)}
-    .plan-step-arrow{font-size:10px;color:var(--muted)}
+    /* ── Plan bar (bottom of chat area) ── */
+    #plan-bar{display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin:8px 20px;padding:10px 14px;box-shadow:var(--shadow)}
+    #plan-bar.visible{display:block}
+    .plan-bar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .plan-bar-title{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+    .plan-bar-count{font-size:11px;color:var(--muted);background:var(--surface2);border-radius:10px;padding:2px 7px}
+    .plan-bar-chevron{font-size:11px;color:var(--muted);cursor:pointer;padding:2px 4px;transition:transform .2s}
+    .plan-bar-chevron.open{transform:rotate(90deg)}
+    .plan-steps-mini{display:none;flex-direction:column;gap:2px}
+    .plan-steps-mini.open{display:flex}
+    .plan-step-mini{display:flex;align-items:center;gap:8px;padding:3px 0}
+    .plan-step-mini-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    .plan-step-mini-dot.done{background:var(--muted2);border-color:var(--muted2)}
+    .plan-step-mini-dot.running{border-color:var(--warning);border-top-color:transparent;animation:spin .8s linear infinite}
+    .plan-step-mini-dot.failed{background:var(--error);border-color:var(--error)}
+    .plan-step-mini-text{font-size:12px;color:var(--muted2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .plan-step-mini-text.done{color:var(--muted)}
 
     /* ── Input area ── */
-    #input-area{padding:10px 18px 18px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0}
-    #input-area.with-panel{padding-bottom:64px}
-    .input-box{display:flex;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:10px 10px 10px 14px;transition:border-color .15s}
-    .input-box:focus-within{border-color:var(--accent)}
-    #user-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13.5px;line-height:1.5;resize:none;max-height:140px;min-height:22px;font-family:inherit;scrollbar-width:none}
+    #input-area{padding:10px 18px 18px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+    .input-box{display:flex;gap:8px;align-items:flex-end;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:10px 10px 10px 14px;transition:border-color .15s}
+    .input-box:focus-within{border-color:var(--accent2)}
+    #user-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:14px;line-height:1.5;resize:none;max-height:140px;min-height:22px;font-family:inherit;scrollbar-width:none}
     #user-input::placeholder{color:var(--muted)}
     #user-input::-webkit-scrollbar{display:none}
     #send-btn,#stop-btn{width:34px;height:34px;border-radius:9px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s}
-    #send-btn{background:linear-gradient(135deg,var(--accent),var(--accent2))}
-    #send-btn:hover{opacity:.9;transform:scale(1.04)}
+    #send-btn{background:#1a1a2e}
+    #send-btn:hover{opacity:.85;transform:scale(1.04)}
     #send-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
-    #send-btn svg,#stop-btn svg{width:15px;height:15px;fill:#fff}
+    #send-btn svg{width:16px;height:16px;fill:#fff}
     #stop-btn{background:var(--surface2);border:1px solid var(--border)}
     #stop-btn:hover{background:var(--surface3)}
+    #stop-btn svg{width:14px;height:14px;fill:var(--text2)}
     .input-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;opacity:.5}
 
     /* ── Error toast ── */
-    #error-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#2A0808;border:1px solid #5A1515;color:#FF7070;padding:9px 16px;border-radius:9px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
+    #error-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff3f3;border:1px solid #ffd2d2;color:#cc0000;padding:9px 16px;border-radius:9px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:500;white-space:nowrap;box-shadow:var(--shadow)}
+    @media(prefers-color-scheme:dark){#error-toast{background:#2a0808;border-color:#5a1515;color:#ff7070}}
     #error-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-    /* ── Fullscreen screenshot modal ── */
-    #screenshot-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+    /* ── TOOL PANEL (right side) ── */
+    #tool-panel-inner{display:flex;flex-direction:column;height:100%;min-width:320px}
+    #tp-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+    #tp-title{font-size:15px;font-weight:600;color:var(--text);flex:1}
+    .tp-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s}
+    .tp-btn:hover{background:var(--surface3)}
+    .tp-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+    #tp-tool-info{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+    #tp-tool-icon-box{width:40px;height:40px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    #tp-tool-detail{flex:1;min-width:0}
+    #tp-tool-label{font-size:11px;color:var(--muted2);margin-bottom:3px}
+    #tp-tool-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--pill-border);border-radius:999px;background:var(--pill-bg);max-width:100%;overflow:hidden}
+    #tp-tool-pill-fn{font-size:12.5px;color:var(--text2);white-space:nowrap;flex-shrink:0}
+    #tp-tool-pill-arg{font-size:11.5px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+    #tp-content{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;overflow:hidden}
+    #tp-urlbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0}
+    #tp-url-text{font-size:12px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+    #tp-browser-area{flex:1;position:relative;display:flex;align-items:stretch;overflow:hidden}
+    #vnc-container{position:absolute;inset:0;background:#1a1a1a}
+    #tp-screenshot{position:absolute;inset:0;object-fit:contain;width:100%;height:100%;background:var(--surface2);cursor:pointer}
+    #tp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:10px;padding:20px;text-align:center}
+    #tp-footer{display:flex;align-items:center;justify-content:center;padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;gap:10px}
+    #takeover-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:13px;font-weight:500;color:var(--text);box-shadow:var(--shadow);transition:background .15s,color .15s}
+    #takeover-btn:hover{background:var(--ai-icon-bg);color:#fff;border-color:var(--ai-icon-bg)}
+    #takeover-btn.active{background:var(--ai-icon-bg);color:#fff;border-color:var(--ai-icon-bg)}
+    #takeover-btn svg{width:14px;height:14px}
+    .tp-live-badge{display:none;align-items:center;gap:5px;font-size:11px;color:var(--success);font-weight:500}
+    .tp-live-badge.on{display:flex}
+    .tp-live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:livePulse 1.5s ease infinite}
+    @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* ── Screenshot fullscreen modal ── */
+    #screenshot-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
     #screenshot-modal.open{display:flex}
-    #screenshot-modal img{max-width:95vw;max-height:90vh;border-radius:10px;border:1px solid var(--border)}
+    #screenshot-modal img{max-width:95vw;max-height:90vh;border-radius:8px}
 
     @media(max-width:520px){
-      header{padding:10px 14px}
-      #chat-area{padding:14px 12px 10px}
+      .chat-item,.msg-ai,.msg-step,.msg-think,.msg-user{padding-left:14px;padding-right:14px}
       #input-area{padding:8px 12px 14px}
-      .tool-desc{max-width:160px}
     }
   </style>
 </head>
 <body>
 
 <div id="app">
-  <!-- Header -->
-  <header>
-    <div class="logo-wrap">
-      <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-      <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    </div>
-    <div class="header-info">
-      <div class="header-title">Dzeck AI</div>
-      <div class="header-sub" id="header-sub">Agent Mode · Streaming</div>
-    </div>
-    <div class="status-dot" id="status-dot" title="Online"></div>
-  </header>
-
-  <!-- Chat -->
-  <div id="chat-area">
-    <div id="empty-state">
-      <div class="empty-logo">
+  <!-- ═══ CHAT SIDE ═══ -->
+  <div id="chat-side">
+    <header>
+      <div class="logo-wrap">
         <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
         <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
-      <h2>Dzeck AI</h2>
-      <p>AI Agent otonom dengan browser, terminal, dan memori. Tanyakan apa saja.</p>
-      <div class="chips">
-        <div class="chip" onclick="sendSuggestion(this)">Apa yang bisa kamu lakukan?</div>
-        <div class="chip" onclick="sendSuggestion(this)">Cari berita terbaru hari ini</div>
-        <div class="chip" onclick="sendSuggestion(this)">Buat script Python sederhana</div>
-        <div class="chip" onclick="sendSuggestion(this)">Jelaskan cara kerja AI</div>
+      <div class="header-title">Dzeck AI</div>
+      <div class="status-dot" id="status-dot" title="Online"></div>
+    </header>
+
+    <div id="chat-area">
+      <div id="empty-state">
+        <div class="empty-logo">
+          <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h2>Dzeck AI</h2>
+        <p>Agent otonom dengan browser, terminal, dan memori. Tanyakan apa saja.</p>
+        <div class="chips">
+          <div class="chip" onclick="sendSuggestion(this)">Apa yang bisa kamu lakukan?</div>
+          <div class="chip" onclick="sendSuggestion(this)">Cari berita terbaru hari ini</div>
+          <div class="chip" onclick="sendSuggestion(this)">Buat script Python sederhana</div>
+          <div class="chip" onclick="sendSuggestion(this)">Jelaskan cara kerja AI</div>
+        </div>
       </div>
+    </div>
+
+    <!-- Plan progress bar (collapsed) -->
+    <div id="plan-bar">
+      <div class="plan-bar-header">
+        <div class="plan-bar-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span id="plan-bar-title-text">Progress Tugas</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="plan-bar-count" id="plan-bar-count">0/0</span>
+          <span class="plan-bar-chevron" id="plan-bar-chevron" onclick="togglePlanBar()">›</span>
+        </div>
+      </div>
+      <div class="plan-steps-mini" id="plan-steps-mini"></div>
+    </div>
+
+    <div id="input-area">
+      <div class="input-box">
+        <textarea id="user-input" placeholder="Kirim pesan ke Dzeck AI..." rows="1" autocomplete="off" spellcheck="true"></textarea>
+        <button id="send-btn" onclick="sendMessage()" title="Kirim">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+        <button id="stop-btn" style="display:none" onclick="stopGeneration()" title="Stop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru</div>
     </div>
   </div>
 
-  <!-- Computer Panel (bottom drawer) -->
-  <div id="computer-panel">
-    <div id="computer-handle" onclick="toggleComputer()">
-      <div class="computer-drag-bar"></div>
-      <div class="computer-handle-info">
-        <div class="computer-handle-title">
-          <span class="live-dot"></span>
-          Komputer Dzeck
+  <!-- ═══ TOOL PANEL (right side) ═══ -->
+  <div id="tool-panel">
+    <div id="tool-panel-inner">
+      <div id="tp-header">
+        <div id="tp-title">Komputer Dzeck</div>
+        <div class="tp-live-badge" id="tp-live-badge">
+          <span class="tp-live-dot"></span> LIVE
         </div>
-        <div class="computer-handle-task" id="computer-task-text">Agent sedang bekerja...</div>
-      </div>
-      <div class="computer-handle-actions" onclick="event.stopPropagation()">
-        <button class="computer-action-btn" id="fullscreen-btn" onclick="toggleComputerFullscreen()" title="Layar Penuh">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-        </button>
-        <button class="computer-action-btn" id="panel-close-btn" onclick="hideComputer()" title="Tutup">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button class="tp-btn" onclick="hideToolPanel()" title="Tutup">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <span class="computer-chevron" id="computer-chevron">▲</span>
-    </div>
-    <div class="computer-body">
-      <div class="computer-tabs">
-        <div class="ctab active" onclick="switchTab('browser',this)" id="tab-btn-browser">Browser</div>
-        <div class="ctab" onclick="switchTab('plan',this)" id="tab-btn-plan">Perencana</div>
-      </div>
-      <div class="ctab-content active" id="ctab-browser">
-        <div id="browser-urlbar">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12" stroke="#6E6E82" stroke-width="2"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="#6E6E82" stroke-width="1.5" fill="none"/></svg>
-          <div id="browser-url-text">-</div>
+      <div id="tp-tool-info" style="display:none">
+        <div id="tp-tool-icon-box">
+          <svg id="tp-tool-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"></svg>
         </div>
-        <img id="browser-screen" src="" alt="Browser screenshot" style="display:none" onclick="openScreenshot(this.src)"/>
-        <div id="browser-empty-msg">Tidak ada aktivitas browser</div>
+        <div id="tp-tool-detail">
+          <div id="tp-tool-label">Dzeck sedang menggunakan</div>
+          <div id="tp-tool-pill">
+            <span id="tp-tool-pill-fn"></span>
+            <code id="tp-tool-pill-arg"></code>
+          </div>
+        </div>
       </div>
-      <div class="ctab-content" id="ctab-plan">
-        <div class="perencana-header">Perencana</div>
-        <div id="plan-overview-list"></div>
+      <div id="tp-urlbar" style="display:none">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <div id="tp-url-text">-</div>
+      </div>
+      <div id="tp-content">
+        <div id="tp-browser-area">
+          <div id="vnc-container" style="display:none"></div>
+          <img id="tp-screenshot" style="display:none" onclick="openScreenshot(this.src)" alt="Browser"/>
+          <div id="tp-empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted)"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span style="font-size:13px;color:var(--muted)">Belum ada tampilan browser</span>
+          </div>
+        </div>
+      </div>
+      <div id="tp-footer">
+        <div class="tp-live-badge" id="tp-footer-live" style="display:flex;align-items:center">
+          <span class="tp-live-dot"></span><span style="font-size:11px;color:var(--muted);margin-left:4px" id="tp-footer-status">Menunggu aktivitas...</span>
+        </div>
+        <button id="takeover-btn" onclick="toggleTakeover()" title="Ambil kendali browser">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          <span id="takeover-label">Ambil Kendali</span>
+        </button>
       </div>
     </div>
-  </div>
-
-  <!-- Input area -->
-  <div id="input-area">
-    <div class="input-box">
-      <textarea id="user-input" placeholder="Kirim pesan ke Dzeck AI..." rows="1" autocomplete="off" spellcheck="true"></textarea>
-      <button id="send-btn" onclick="sendMessage()" title="Kirim">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
-      <button id="stop-btn" style="display:none" onclick="stopGeneration()" title="Stop">
-        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-      </button>
-    </div>
-    <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru</div>
   </div>
 </div>
 
@@ -318,28 +362,39 @@
   <img id="screenshot-modal-img" src="" alt="Screenshot"/>
 </div>
 
+<!-- noVNC RFB library (ES Module) -->
+<script type="module">
+  try {
+    const { default: RFB } = await import('https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/core/rfb.js');
+    window._RFB = RFB;
+    console.log('[noVNC] RFB library loaded');
+  } catch(e) {
+    console.warn('[noVNC] Could not load RFB library:', e);
+  }
+</script>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════
 const S = {
   sessionId: null,
+  vncWsPort: null,
+  rfb: null,
+  isTakeover: false,
   isStreaming: false,
   abortController: null,
   plan: null,
-  planCardEl: null,
   currentStepId: null,
-  stepEls: {},        // stepId → { headerEl, toolsEl, statusEl, toggleEl }
-  toolEls: {},        // toolCallId → { itemEl, statusEl, resultEl }
-  toolsByStep: {},    // stepId → [toolCallId, ...]
-  aiMsgEl: null,
+  stepEls: {},
+  toolEls: {},
+  toolsByStep: {},
+  aiBodyEl: null,
   aiContent: '',
-  computerVisible: false,
-  computerCollapsed: false,
-  computerFullscreen: false,
-  currentTab: 'browser',
   latestScreenshot: null,
-  latestBrowserUrl: '',
+  latestUrl: '',
+  currentToolCallId: null,
+  planBarOpen: false,
 };
 
 // ─── Elements ───────────────────────────────────────────────
@@ -348,39 +403,48 @@ const inputEl  = document.getElementById('user-input');
 const sendBtn  = document.getElementById('send-btn');
 const stopBtn  = document.getElementById('stop-btn');
 const emptyEl  = document.getElementById('empty-state');
-const computerPanel = document.getElementById('computer-panel');
-const computerTaskText = document.getElementById('computer-task-text');
-const browserScreen = document.getElementById('browser-screen');
-const browserUrlText = document.getElementById('browser-url-text');
-const browserEmptyMsg = document.getElementById('browser-empty-msg');
-const planOverviewList = document.getElementById('plan-overview-list');
 const inputArea = document.getElementById('input-area');
+const toolPanel = document.getElementById('tool-panel');
+const vncContainer = document.getElementById('vnc-container');
+const tpScreenshot = document.getElementById('tp-screenshot');
+const tpEmpty  = document.getElementById('tp-empty');
+const tpUrlbar = document.getElementById('tp-urlbar');
+const tpUrlText = document.getElementById('tp-url-text');
+const tpToolInfo = document.getElementById('tp-tool-info');
+const tpLiveBadge = document.getElementById('tp-live-badge');
+const tpFooterStatus = document.getElementById('tp-footer-status');
+const planBar  = document.getElementById('plan-bar');
+const planStepsMini = document.getElementById('plan-steps-mini');
 
 // ═══════════════════════════════════════════════════════════
 // Utilities
 // ═══════════════════════════════════════════════════════════
-function esc(text) {
+function esc(t) {
   const d = document.createElement('div');
-  d.appendChild(document.createTextNode(text));
+  d.appendChild(document.createTextNode(t));
   return d.innerHTML;
 }
 
 function renderMarkdown(text) {
+  if (!text) return '';
   let h = esc(text);
   h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_,l,c)=>`<pre><code>${c}</code></pre>`);
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  h = h.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
+  h = h.replace(/\*(.+?)\*/gs, '<em>$1</em>');
   h = h.replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>');
   h = h.replace(/^\- (.+)$/gm, '<li>$1</li>');
   h = h.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+  h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   h = h.replace(/\n\n+/g, '</p><p>');
   h = h.replace(/\n/g, '<br>');
   return '<p>' + h + '</p>';
 }
 
-function scrollBottom() {
-  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
+function scrollBottom(force) {
+  const threshold = 150;
+  const atBottom = chatEl.scrollHeight - chatEl.clientHeight - chatEl.scrollTop < threshold;
+  if (atBottom || force) chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
 }
 
 function showError(msg) {
@@ -396,374 +460,426 @@ function setStreaming(v) {
   stopBtn.style.display = v ? 'flex' : 'none';
   inputEl.disabled = v;
   document.getElementById('status-dot').style.background = v ? 'var(--warning)' : 'var(--success)';
-  if (!v) { inputEl.focus(); inputArea.classList.remove('with-panel'); }
+  if (!v) { inputEl.focus(); }
 }
 
-// ═══════════════════════════════════════════════════════════
-// Chat message builders
-// ═══════════════════════════════════════════════════════════
 function removeEmpty() {
   if (emptyEl && emptyEl.parentNode) emptyEl.remove();
 }
 
+// ═══════════════════════════════════════════════════════════
+// Message Builders
+// ═══════════════════════════════════════════════════════════
 function appendUserMsg(text) {
   removeEmpty();
   const el = document.createElement('div');
-  el.className = 'msg user';
-  el.innerHTML = `
-    <div class="avatar user">Me</div>
-    <div class="bubble">${renderMarkdown(text)}</div>
-  `;
+  el.className = 'msg-user';
+  el.innerHTML = `<div class="msg-user-bubble">${renderMarkdown(text)}</div>`;
   chatEl.appendChild(el);
-  scrollBottom();
+  scrollBottom(true);
 }
 
-function createAiMsgEl() {
+function createAiMsg() {
   removeEmpty();
-  const el = document.createElement('div');
-  el.className = 'msg ai';
-  el.innerHTML = `
-    <div class="avatar ai">
-      <img src="/assets/images/icon.png" alt="AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-      <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-ai';
+  wrap.innerHTML = `
+    <div class="msg-ai-header">
+      <div class="ai-avatar">
+        <img src="/assets/images/icon.png" alt="AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <span class="ai-name">Dzeck</span>
     </div>
-    <div class="bubble" id="ai-bubble-active">
-      <div class="typing-indicator">
+    <div class="ai-body" id="ai-body-active">
+      <div class="typing-dots">
         <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
       </div>
     </div>
   `;
+  chatEl.appendChild(wrap);
+  scrollBottom(true);
+  return wrap.querySelector('#ai-body-active');
+}
+
+function appendThinkText(text) {
+  removeEmpty();
+  const el = document.createElement('div');
+  el.className = 'msg-think';
+  el.innerHTML = `<div class="think-text">${esc(text)}</div>`;
   chatEl.appendChild(el);
   scrollBottom();
-  return el.querySelector('#ai-bubble-active');
+  return el;
 }
 
 // ═══════════════════════════════════════════════════════════
-// Plan Card
+// Step rows (shown in chat)
 // ═══════════════════════════════════════════════════════════
-function createPlanCard(plan) {
-  removeEmpty();
-  const card = document.createElement('div');
-  card.className = 'plan-card';
-  card.id = 'plan-card-main';
-
-  const steps = plan.steps || [];
-  const stepsHtml = steps.map(st => buildStepRow(st)).join('');
-
-  card.innerHTML = `
-    <div class="plan-card-header">
-      <div class="plan-icon">
-        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      </div>
-      <div class="plan-title-text" id="plan-title-text">${esc(plan.title || 'Rencana Eksekusi')}</div>
-      <div class="plan-count" id="plan-count">0/${steps.length}</div>
+function createStepRow(step) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-step';
+  wrap.id = `step-wrap-${step.id}`;
+  wrap.innerHTML = `
+    <div class="step-row-inner" onclick="toggleStep('${step.id}')">
+      <div class="step-status-ico pending" id="step-ico-${step.id}"></div>
+      <div class="step-desc" id="step-desc-${step.id}">${esc(step.description || '')}</div>
+      <span class="step-chevron" id="step-chev-${step.id}">›</span>
     </div>
-    <div class="plan-steps-list" id="plan-steps-list">
-      ${stepsHtml}
-    </div>
+    <div class="step-tools-wrap" id="step-tools-${step.id}"></div>
   `;
-  chatEl.appendChild(card);
+  chatEl.appendChild(wrap);
   scrollBottom();
-  S.planCardEl = card;
-
-  // Register step elements
-  steps.forEach(st => {
-    S.stepEls[st.id] = {
-      headerEl: card.querySelector(`#step-h-${st.id}`),
-      toolsEl:  card.querySelector(`#step-tools-${st.id}`),
-      statusEl: card.querySelector(`#step-status-${st.id}`),
-      toggleEl: card.querySelector(`#step-toggle-${st.id}`),
-    };
-    S.toolsByStep[st.id] = [];
-  });
-  return card;
+  return wrap;
 }
 
-function buildStepRow(st) {
-  const statusHtml = getStepStatusHtml(st.status || 'pending');
-  return `
-    <div class="step-row" id="step-row-${st.id}">
-      <div class="step-header" id="step-h-${st.id}" onclick="toggleStep('${st.id}')">
-        <div class="step-status" id="step-status-${st.id}">${statusHtml}</div>
-        <div class="step-name" id="step-name-${st.id}">${esc(st.description || 'Step')}</div>
-        <div class="step-toggle" id="step-toggle-${st.id}">›</div>
-      </div>
-      <div class="step-tools" id="step-tools-${st.id}"></div>
-    </div>
-  `;
-}
-
-function getStepStatusHtml(status) {
-  if (status === 'completed') return `<svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:#fff;stroke-width:3"><polyline points="20 6 9 17 4 12"/></svg>`;
-  if (status === 'running') return `<div class="spin"></div>`;
-  if (status === 'failed') return `<svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:#fff;stroke-width:3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-  return ''; // pending = empty circle
+function getStepIcoHtml(status) {
+  if (status === 'completed') return `<svg class="step-check-svg" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="10 3 5 9 2 6"/></svg>`;
+  if (status === 'failed') return `<svg class="step-check-svg" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5"><line x1="9" y1="3" x2="3" y2="9"/><line x1="3" y1="3" x2="9" y2="9"/></svg>`;
+  return '';
 }
 
 function updateStepStatus(stepId, status) {
-  const els = S.stepEls[stepId];
-  if (!els || !els.statusEl) return;
-
-  const sc = els.statusEl;
-  sc.className = `step-status ${status}`;
-  sc.innerHTML = getStepStatusHtml(status);
-
-  const nameEl = document.getElementById(`step-name-${stepId}`);
-  if (nameEl) nameEl.className = status === 'completed' ? 'step-name muted' : 'step-name';
-
-  // Update plan count
-  updatePlanCount();
-}
-
-function updatePlanCount() {
-  if (!S.plan) return;
-  const done = S.plan.steps.filter(s => s.status === 'completed' || s.status === 'failed').length;
-  const total = S.plan.steps.length;
-  const el = document.getElementById('plan-count');
-  if (el) el.textContent = `${done}/${total}`;
+  const ico = document.getElementById(`step-ico-${stepId}`);
+  const desc = document.getElementById(`step-desc-${stepId}`);
+  if (ico) {
+    ico.className = `step-status-ico ${status}`;
+    ico.innerHTML = getStepIcoHtml(status);
+  }
+  if (desc) desc.className = `step-desc ${status === 'completed' ? 'done' : ''}`;
 }
 
 function toggleStep(stepId) {
-  const els = S.stepEls[stepId];
-  if (!els) return;
-  const toolsEl = els.toolsEl || document.getElementById(`step-tools-${stepId}`);
-  const toggleEl = els.toggleEl || document.getElementById(`step-toggle-${stepId}`);
+  const toolsEl = document.getElementById(`step-tools-${stepId}`);
+  const chevEl = document.getElementById(`step-chev-${stepId}`);
   if (toolsEl) toolsEl.classList.toggle('open');
-  if (toggleEl) toggleEl.classList.toggle('open');
+  if (chevEl) chevEl.classList.toggle('open');
 }
 
 function openStep(stepId) {
   const toolsEl = document.getElementById(`step-tools-${stepId}`);
-  const toggleEl = document.getElementById(`step-toggle-${stepId}`);
+  const chevEl = document.getElementById(`step-chev-${stepId}`);
   if (toolsEl) toolsEl.classList.add('open');
-  if (toggleEl) toggleEl.classList.add('open');
+  if (chevEl) chevEl.classList.add('open');
 }
 
 // ═══════════════════════════════════════════════════════════
-// Tool items
+// Tool chips (Manus pill style)
 // ═══════════════════════════════════════════════════════════
-const TOOL_META = {
-  browser:  { label: 'Browser',   icon: '🌐', cls: 'browser' },
-  shell:    { label: 'Terminal',  icon: '⌨️', cls: 'shell' },
-  search:   { label: 'Pencarian', icon: '🔍', cls: 'search' },
-  file:     { label: 'File',      icon: '📄', cls: 'file' },
-  mcp:      { label: 'MCP',       icon: '🔧', cls: 'mcp' },
-  message:  { label: 'Pesan',     icon: '💬', cls: 'message' },
+const TOOL_FN_MAP = {
+  'browser_navigate':   'Navigating to webpage',
+  'browser_restart':    'Restarting browser',
+  'browser_view':       'Viewing webpage',
+  'browser_click':      'Clicking element',
+  'browser_input':      'Entering text',
+  'browser_move_mouse': 'Moving mouse',
+  'browser_press_key':  'Pressing key',
+  'browser_scroll_up':  'Scrolling up',
+  'browser_scroll_down':'Scrolling down',
+  'browser_console_exec':'Executing JS code',
+  'browser_console_view':'Viewing console',
+  'browser_save_image': 'Saving image',
+  'shell_exec':         'Executing command',
+  'shell_view':         'Viewing output',
+  'shell_wait':         'Waiting for process',
+  'shell_write_to_process':'Writing to process',
+  'shell_kill_process': 'Terminating process',
+  'file_read':          'Reading file',
+  'file_write':         'Writing file',
+  'file_str_replace':   'Replacing file content',
+  'file_find_in_content':'Searching file content',
+  'file_find_by_name':  'Finding file',
+  'info_search_web':    'Searching web',
+  'message_notify_user':'Sending notification',
+  'message_ask_user':   'Asking question',
+  'web_browse':         'Browsing web',
 };
 
-function getToolMeta(toolName) {
-  const n = (toolName || '').toLowerCase();
-  if (n.includes('browser') || n.includes('web_browse') || n.includes('navigate')) return TOOL_META.browser;
-  if (n.includes('shell') || n.includes('terminal')) return TOOL_META.shell;
-  if (n.includes('search') || n.includes('info_search')) return TOOL_META.search;
-  if (n.includes('file') || n.includes('image_view')) return TOOL_META.file;
-  if (n.includes('mcp')) return TOOL_META.mcp;
-  if (n.includes('message') || n.includes('notify')) return TOOL_META.message;
-  return { label: toolName || 'Tool', icon: '⚙️', cls: 'default' };
+const TOOL_ARG_MAP = {
+  'browser_navigate': 'url', 'browser_restart': 'url', 'browser_view': 'url',
+  'browser_click': 'selector', 'browser_input': 'text', 'shell_exec': 'command',
+  'file_read': 'file', 'file_write': 'file', 'info_search_web': 'query',
+  'message_notify_user': 'message', 'web_browse': 'url',
+};
+
+const TOOL_ICONS = {
+  browser: `<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/>`,
+  shell:   `<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>`,
+  search:  `<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+  file:    `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,
+  message: `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+  default: `<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0"/>`,
+};
+
+function getToolType(fnName) {
+  if (!fnName) return 'default';
+  if (fnName.includes('browser') || fnName.includes('web_browse')) return 'browser';
+  if (fnName.includes('shell')) return 'shell';
+  if (fnName.includes('search') || fnName.includes('info_search')) return 'search';
+  if (fnName.includes('file')) return 'file';
+  if (fnName.includes('message') || fnName.includes('notify')) return 'message';
+  return 'default';
 }
 
-function getToolDescription(fnName, fnArgs) {
-  if (!fnArgs) return fnName || '';
-  const url = fnArgs.url || fnArgs.query || fnArgs.command || fnArgs.path || fnArgs.file || fnArgs.text || '';
-  if (url) return String(url).substring(0, 60);
-  return fnName || '';
+function getToolFnLabel(fnName) {
+  return TOOL_FN_MAP[fnName] || fnName || 'Tool';
 }
 
-function addToolItem(stepId, toolCallId, evt) {
+function getToolArg(fnName, fnArgs) {
+  if (!fnArgs) return '';
+  const key = TOOL_ARG_MAP[fnName];
+  if (key && fnArgs[key]) return String(fnArgs[key]).substring(0, 60);
+  const vals = Object.values(fnArgs).filter(v => typeof v === 'string');
+  if (vals.length) return vals[0].substring(0, 60);
+  return '';
+}
+
+function addToolChip(stepId, toolCallId, evt) {
   const toolsEl = document.getElementById(`step-tools-${stepId}`);
   if (!toolsEl) return;
 
-  const meta = getToolMeta(evt.function_name || evt.tool_name || '');
-  const desc = getToolDescription(evt.function_name, evt.function_args);
-  const statusHtml = `<div class="spin" id="tool-spin-${toolCallId}"></div>`;
+  const fn = evt.function_name || evt.tool_name || '';
+  const type = getToolType(fn);
+  const fnLabel = getToolFnLabel(fn);
+  const arg = getToolArg(fn, evt.function_args);
+  const iconSvg = TOOL_ICONS[type] || TOOL_ICONS.default;
 
-  const item = document.createElement('div');
-  item.className = 'tool-item calling';
-  item.id = `tool-item-${toolCallId}`;
-  item.innerHTML = `
-    <div class="tool-icon-wrap ${meta.cls}">${meta.icon}</div>
-    <div class="tool-label">
-      <div class="tool-name">${esc(meta.label)}</div>
-      <div class="tool-desc" id="tool-desc-${toolCallId}">${esc(desc)}</div>
-    </div>
-    <div class="tool-status-icon" id="tool-si-${toolCallId}">${statusHtml}</div>
-    <div class="tool-result-area" id="tool-result-${toolCallId}"></div>
+  const chip = document.createElement('div');
+  chip.className = 'tool-chip calling';
+  chip.id = `tool-chip-${toolCallId}`;
+  chip.onclick = () => openToolPanel(toolCallId);
+  chip.innerHTML = `
+    <span class="tool-chip-icon">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">${iconSvg}</svg>
+    </span>
+    <span class="tool-chip-fn">${esc(fnLabel)}</span>
+    ${arg ? `<code class="tool-chip-arg" id="chip-arg-${toolCallId}">${esc(arg)}</code>` : ''}
+    <span class="tool-chip-status" id="chip-status-${toolCallId}">
+      <span class="tool-chip-spin"></span>
+    </span>
   `;
-  toolsEl.appendChild(item);
+  toolsEl.appendChild(chip);
   scrollBottom();
-  S.toolEls[toolCallId] = item;
+
+  S.toolEls[toolCallId] = { chip, type, fnLabel, arg, fn };
+
+  // Update tool panel info
+  updateToolPanelInfo(type, fnLabel, arg, iconSvg);
 }
 
-function updateToolItem(toolCallId, evt) {
-  const item = S.toolEls[toolCallId] || document.getElementById(`tool-item-${toolCallId}`);
-  if (!item) return;
+function updateToolChip(toolCallId, evt) {
+  const info = S.toolEls[toolCallId];
+  if (!info) return;
+  const chip = info.chip || document.getElementById(`tool-chip-${toolCallId}`);
+  if (!chip) return;
 
   const ok = evt.status === 'called';
   const err = evt.status === 'error';
-  item.className = `tool-item ${ok ? 'called' : 'error'}`;
+  chip.className = `tool-chip ${ok ? 'called' : err ? 'error' : 'calling'}`;
 
-  const siEl = document.getElementById(`tool-si-${toolCallId}`);
-  if (siEl) {
-    if (ok) siEl.innerHTML = '<span style="color:var(--success);font-size:14px">✓</span>';
-    else if (err) siEl.innerHTML = '<span style="color:var(--error);font-size:14px">✕</span>';
+  const statusEl = document.getElementById(`chip-status-${toolCallId}`);
+  if (statusEl) {
+    if (ok) statusEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--muted)" stroke-width="2.5"><polyline points="10 3 5 9 2 6"/></svg>`;
+    else if (err) statusEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--error)" stroke-width="2.5"><line x1="9" y1="3" x2="3" y2="9"/><line x1="3" y1="3" x2="9" y2="9"/></svg>`;
   }
 
-  // Show result text if available
-  const resultEl = document.getElementById(`tool-result-${toolCallId}`);
-  if (resultEl && evt.function_result) {
-    const shortResult = String(evt.function_result).substring(0, 300);
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = `<div class="tool-result-text">${esc(shortResult)}</div>`;
-  }
-
-  // Handle browser tool_content with screenshot
+  // Handle tool content (browser screenshot etc.)
   const tc = evt.tool_content;
   if (tc) {
     if (tc.type === 'browser') {
       if (tc.screenshot_b64) {
-        updateBrowserScreenshot(tc.screenshot_b64, tc.url || '', tc.title || '');
-        // also show screenshot in the tool item
-        if (resultEl) {
-          resultEl.style.display = 'block';
-          const imgSrc = `data:image/png;base64,${tc.screenshot_b64}`;
-          const existImg = resultEl.querySelector('.tool-screenshot');
-          if (!existImg) {
-            const img = document.createElement('img');
-            img.className = 'tool-screenshot';
-            img.src = imgSrc;
-            img.onclick = (e) => { e.stopPropagation(); openScreenshot(imgSrc); };
-            resultEl.appendChild(img);
+        const src = `data:image/png;base64,${tc.screenshot_b64}`;
+        S.latestScreenshot = src;
+        updateTpScreenshot(src, tc.url || '');
+
+        // Show screenshot thumbnail under chip
+        const toolsEl = chip.parentElement;
+        if (toolsEl) {
+          const existThumb = document.getElementById(`chip-thumb-${toolCallId}`);
+          if (!existThumb) {
+            const thumb = document.createElement('div');
+            thumb.id = `chip-thumb-${toolCallId}`;
+            thumb.className = 'tool-screenshot-inline';
+            thumb.innerHTML = `<img src="${src}" alt="screenshot" onclick="openScreenshot('${src.replace(/'/g,'\\'')}')"/>`;
+            toolsEl.appendChild(thumb);
           } else {
-            existImg.src = imgSrc;
+            existThumb.querySelector('img').src = src;
           }
         }
       }
       if (tc.url) {
-        const descEl = document.getElementById(`tool-desc-${toolCallId}`);
-        if (descEl) descEl.textContent = tc.url.substring(0, 60);
-        updateBrowserUrl(tc.url);
+        const argEl = document.getElementById(`chip-arg-${toolCallId}`);
+        if (argEl) argEl.textContent = tc.url.substring(0, 60);
+        updateTpUrl(tc.url);
       }
-    } else if (tc.type === 'shell' && tc.console) {
-      if (resultEl) {
-        resultEl.style.display = 'block';
-        resultEl.innerHTML = `<div class="tool-result-text">${esc(tc.console.substring(0, 500))}</div>`;
-      }
-    } else if (tc.type === 'search' && tc.results && tc.results.length) {
-      if (resultEl) {
-        const summary = tc.results.slice(0, 3).map(r => `• ${r.title || r.url || ''}`).join('\n');
-        resultEl.style.display = 'block';
-        resultEl.innerHTML = `<div class="tool-result-text">${esc(summary)}</div>`;
-      }
+    }
+    if (tc.type === 'shell' && tc.console) {
+      tpFooterStatus.textContent = tc.console.substring(0, 80);
+    }
+    if (tc.type === 'search' && tc.results?.length) {
+      tpFooterStatus.textContent = `${tc.results.length} hasil ditemukan`;
     }
   }
   scrollBottom();
 }
 
 // ═══════════════════════════════════════════════════════════
-// Computer Panel
+// Tool Panel (right side)
 // ═══════════════════════════════════════════════════════════
-function showComputer() {
-  computerPanel.classList.add('visible');
-  S.computerVisible = true;
-  inputArea.classList.add('with-panel');
+function showToolPanel() {
+  toolPanel.classList.add('open');
 }
 
-function hideComputer() {
-  computerPanel.classList.remove('visible','fullscreen');
-  S.computerVisible = false;
-  S.computerFullscreen = false;
-  inputArea.classList.remove('with-panel');
-  _updateFullscreenBtn();
+function hideToolPanel() {
+  toolPanel.classList.remove('open');
+  disconnectVNC();
 }
 
-function toggleComputer() {
-  if (computerPanel.classList.contains('fullscreen')) return; // don't collapse when fullscreen
-  computerPanel.classList.toggle('collapsed');
-  S.computerCollapsed = computerPanel.classList.contains('collapsed');
-}
-
-function toggleComputerFullscreen() {
-  const isFs = computerPanel.classList.toggle('fullscreen');
-  S.computerFullscreen = isFs;
-  if (isFs) {
-    computerPanel.classList.remove('collapsed');
-    S.computerCollapsed = false;
-    inputArea.classList.remove('with-panel');
-  } else {
-    inputArea.classList.add('with-panel');
-  }
-  _updateFullscreenBtn();
-}
-
-function _updateFullscreenBtn() {
-  const btn = document.getElementById('fullscreen-btn');
-  if (!btn) return;
-  if (S.computerFullscreen) {
-    btn.title = 'Keluar Layar Penuh';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>';
-  } else {
-    btn.title = 'Layar Penuh';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+function openToolPanel(toolCallId) {
+  showToolPanel();
+  if (S.latestScreenshot) {
+    tpScreenshot.src = S.latestScreenshot;
+    tpScreenshot.style.display = 'block';
+    tpEmpty.style.display = 'none';
   }
 }
 
-function switchTab(name, btn) {
-  document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.ctab-content').forEach(c => c.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  document.getElementById(`ctab-${name}`).classList.add('active');
-  S.currentTab = name;
+function updateToolPanelInfo(type, fnLabel, arg, iconSvg) {
+  tpToolInfo.style.display = 'flex';
+  document.getElementById('tp-tool-icon').innerHTML = iconSvg;
+  document.getElementById('tp-tool-pill-fn').textContent = fnLabel;
+  document.getElementById('tp-tool-pill-arg').textContent = arg;
+  if (type === 'browser') {
+    tpUrlbar.style.display = 'flex';
+  }
+  showToolPanel();
 }
 
-function updateBrowserUrl(url) {
-  browserUrlText.textContent = url || '-';
+function updateTpScreenshot(src, url) {
+  tpScreenshot.src = src;
+  tpScreenshot.style.display = 'block';
+  tpEmpty.style.display = 'none';
+  if (vncContainer.style.display !== 'block') {
+    // only show screenshot if VNC not active
+  }
+  if (url) updateTpUrl(url);
+  tpFooterStatus.textContent = 'Screenshot diperbarui';
 }
 
-function updateBrowserScreenshot(b64, url, title) {
-  S.latestScreenshot = b64;
-  S.latestBrowserUrl = url;
-
-  const src = `data:image/png;base64,${b64}`;
-  browserScreen.src = src;
-  browserScreen.style.display = 'block';
-  browserEmptyMsg.style.display = 'none';
-  if (url) updateBrowserUrl(url);
-  showComputer();
-
-  // Auto switch to browser tab
-  switchTab('browser', document.getElementById('tab-btn-browser'));
+function updateTpUrl(url) {
+  S.latestUrl = url;
+  tpUrlText.textContent = url;
+  tpUrlbar.style.display = 'flex';
 }
 
-function updateComputerTask(text) {
-  if (text) computerTaskText.textContent = text;
+// ═══════════════════════════════════════════════════════════
+// Plan progress bar
+// ═══════════════════════════════════════════════════════════
+function buildPlanBar(plan) {
+  const steps = plan.steps || [];
+  document.getElementById('plan-bar-title-text').textContent = plan.title || 'Progress Tugas';
+  planBar.classList.add('visible');
+  updatePlanBarCount();
+  planStepsMini.innerHTML = steps.map(st => `
+    <div class="plan-step-mini" id="plan-mini-${st.id}">
+      <div class="plan-step-mini-dot" id="plan-mini-dot-${st.id}"></div>
+      <div class="plan-step-mini-text" id="plan-mini-text-${st.id}">${esc(st.description || '')}</div>
+    </div>
+  `).join('');
 }
 
-// Plan overview in computer panel
-function buildPlanOverview(plan) {
-  const steps = (plan && plan.steps) || [];
-  planOverviewList.innerHTML = steps.map((st, i) => {
-    const status = st.status || 'pending';
-    const numClass = status === 'completed' ? 'done' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : '';
-    const descClass = status === 'completed' ? 'done' : '';
-    return `
-      <div class="plan-step-overview" id="plan-ov-${st.id}">
-        <div class="plan-step-num ${numClass}">${i+1}</div>
-        <div class="plan-step-desc ${descClass}">${esc(st.description || '')}</div>
-        <div class="plan-step-arrow">${status === 'running' ? '›' : ''}</div>
-      </div>
-    `;
-  }).join('');
+function updatePlanBarCount() {
+  if (!S.plan) return;
+  const done = (S.plan.steps || []).filter(s => s.status === 'completed' || s.status === 'failed').length;
+  const total = (S.plan.steps || []).length;
+  document.getElementById('plan-bar-count').textContent = `${done}/${total}`;
 }
 
-function updatePlanOverviewStep(stepId, status) {
-  const el = document.getElementById(`plan-ov-${stepId}`);
-  if (!el) return;
-  const num = el.querySelector('.plan-step-num');
-  const desc = el.querySelector('.plan-step-desc');
-  const arrow = el.querySelector('.plan-step-arrow');
-  if (num) num.className = `plan-step-num ${status === 'completed' ? 'done' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : ''}`;
-  if (desc) desc.className = `plan-step-desc ${status === 'completed' ? 'done' : ''}`;
-  if (arrow) arrow.textContent = status === 'running' ? '›' : '';
+function updatePlanMiniStep(stepId, status) {
+  const dot = document.getElementById(`plan-mini-dot-${stepId}`);
+  const text = document.getElementById(`plan-mini-text-${stepId}`);
+  if (dot) dot.className = `plan-step-mini-dot ${status === 'completed' ? 'done' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : ''}`;
+  if (text) text.className = `plan-step-mini-text ${status === 'completed' ? 'done' : ''}`;
+}
+
+function togglePlanBar() {
+  S.planBarOpen = !S.planBarOpen;
+  const chev = document.getElementById('plan-bar-chevron');
+  if (chev) chev.className = `plan-bar-chevron ${S.planBarOpen ? 'open' : ''}`;
+  planStepsMini.className = `plan-steps-mini ${S.planBarOpen ? 'open' : ''}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// VNC (noVNC)
+// ═══════════════════════════════════════════════════════════
+function connectVNC(wsPort) {
+  if (!window._RFB) { console.warn('[VNC] RFB library not loaded'); return; }
+  disconnectVNC();
+
+  const host = window.location.hostname;
+  const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProto}//${host}/vnc-proxy?port=${wsPort}`;
+
+  try {
+    S.rfb = new window._RFB(vncContainer, wsUrl, {
+      credentials: { password: '' },
+      shared: true,
+      wsProtocols: ['binary'],
+      scaleViewport: true,
+    });
+    S.rfb.viewOnly = true;
+    S.rfb.scaleViewport = true;
+
+    S.rfb.addEventListener('connect', () => {
+      console.log('[VNC] Connected');
+      vncContainer.style.display = 'block';
+      tpScreenshot.style.display = 'none';
+      tpEmpty.style.display = 'none';
+      tpLiveBadge.classList.add('on');
+      tpFooterStatus.textContent = 'Browser terhubung langsung';
+    });
+    S.rfb.addEventListener('disconnect', () => {
+      console.log('[VNC] Disconnected');
+      vncContainer.style.display = 'none';
+      tpLiveBadge.classList.remove('on');
+      if (S.latestScreenshot) {
+        tpScreenshot.src = S.latestScreenshot;
+        tpScreenshot.style.display = 'block';
+      }
+      tpFooterStatus.textContent = 'VNC terputus';
+      S.rfb = null;
+    });
+  } catch(e) {
+    console.error('[VNC] Error:', e);
+  }
+}
+
+function disconnectVNC() {
+  if (S.rfb) {
+    try { S.rfb.disconnect(); } catch(e) {}
+    S.rfb = null;
+  }
+  vncContainer.style.display = 'none';
+  tpLiveBadge.classList.remove('on');
+}
+
+function toggleTakeover() {
+  S.isTakeover = !S.isTakeover;
+  const btn = document.getElementById('takeover-btn');
+  const label = document.getElementById('takeover-label');
+
+  if (S.rfb) {
+    S.rfb.viewOnly = !S.isTakeover;
+  }
+
+  if (S.isTakeover) {
+    btn.classList.add('active');
+    label.textContent = 'Keluar Kendali';
+    tpFooterStatus.textContent = 'Mode interaktif aktif';
+  } else {
+    btn.classList.remove('active');
+    label.textContent = 'Ambil Kendali';
+    tpFooterStatus.textContent = 'Mode tampilan saja';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -776,6 +892,11 @@ function handleEvent(evt) {
 
     case 'session':
       S.sessionId = evt.session_id;
+      if (evt.vnc_ws_port) {
+        S.vncWsPort = evt.vnc_ws_port;
+        connectVNC(evt.vnc_ws_port);
+        showToolPanel();
+      }
       break;
 
     case 'title':
@@ -787,65 +908,52 @@ function handleEvent(evt) {
       const plan = evt.plan;
 
       if (status === 'creating') {
-        // Show planning indicator
-        if (!S.aiMsgEl) {
-          S.aiMsgEl = createAiMsgEl();
+        if (!S.aiBodyEl) {
+          S.aiBodyEl = createAiMsg();
           S.aiContent = '';
         }
         break;
       }
 
-      if (status === 'created' && plan) {
+      if ((status === 'created' || status === 'running') && plan) {
         S.plan = plan;
-        // Remove the typing bubble if it's still there for planning
-        if (S.aiMsgEl) {
-          S.aiMsgEl.closest('.msg')?.remove();
-          S.aiMsgEl = null;
-          S.aiContent = '';
+        // Remove typing bubble
+        if (S.aiBodyEl) {
+          S.aiBodyEl.closest('.msg-ai')?.remove();
+          S.aiBodyEl = null; S.aiContent = '';
         }
-        createPlanCard(plan);
-        buildPlanOverview(plan);
-        showComputer();
-        updateComputerTask(plan.title || '');
-      }
-
-      if (status === 'running' && plan && !S.planCardEl) {
-        S.plan = plan;
-        createPlanCard(plan);
-        buildPlanOverview(plan);
-        showComputer();
+        // Create step rows in chat
+        (plan.steps || []).forEach(st => {
+          if (!document.getElementById(`step-wrap-${st.id}`)) {
+            createStepRow(st);
+            S.stepEls[st.id] = true;
+            S.toolsByStep[st.id] = [];
+          }
+        });
+        buildPlanBar(plan);
+        showToolPanel();
       }
 
       if (status === 'updated' && plan) {
         S.plan = plan;
-        // Rebuild if new steps were added
-        const list = document.getElementById('plan-steps-list');
-        if (list && plan.steps) {
-          plan.steps.forEach(st => {
-            if (!document.getElementById(`step-row-${st.id}`)) {
-              const row = document.createElement('div');
-              row.innerHTML = buildStepRow(st);
-              list.appendChild(row.firstElementChild);
-              S.stepEls[st.id] = {
-                headerEl: list.querySelector(`#step-h-${st.id}`),
-                toolsEl:  list.querySelector(`#step-tools-${st.id}`),
-                statusEl: list.querySelector(`#step-status-${st.id}`),
-                toggleEl: list.querySelector(`#step-toggle-${st.id}`),
-              };
-              S.toolsByStep[st.id] = [];
-            }
-          });
-          buildPlanOverview(plan);
-          updatePlanCount();
-        }
+        (plan.steps || []).forEach(st => {
+          if (!document.getElementById(`step-wrap-${st.id}`)) {
+            createStepRow(st);
+            S.stepEls[st.id] = true;
+            S.toolsByStep[st.id] = [];
+          }
+        });
+        buildPlanBar(plan);
+        updatePlanBarCount();
       }
 
       if (status === 'completed' && plan) {
         S.plan = plan;
-        updatePlanCount();
-        buildPlanOverview(plan);
-        // Mark all steps
-        (plan.steps || []).forEach(st => updateStepStatus(st.id, st.status || 'completed'));
+        updatePlanBarCount();
+        (plan.steps || []).forEach(st => {
+          updateStepStatus(st.id, st.status || 'completed');
+          updatePlanMiniStep(st.id, st.status || 'completed');
+        });
       }
       break;
     }
@@ -856,19 +964,19 @@ function handleEvent(evt) {
       const stepId = step.id;
       if (!stepId) break;
 
-      // Update local plan reference
       if (S.plan) {
-        const ps = S.plan.steps.find(s => s.id === stepId);
+        const ps = S.plan.steps?.find(s => s.id === stepId);
         if (ps) ps.status = status;
       }
 
       updateStepStatus(stepId, status);
-      updatePlanOverviewStep(stepId, status);
+      updatePlanMiniStep(stepId, status);
+      updatePlanBarCount();
 
       if (status === 'running') {
         S.currentStepId = stepId;
         openStep(stepId);
-        updateComputerTask(step.description || '');
+        tpFooterStatus.textContent = step.description || 'Agent sedang bekerja...';
         if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
       }
       break;
@@ -880,52 +988,48 @@ function handleEvent(evt) {
       const stepId = S.currentStepId;
 
       if (status === 'calling') {
+        S.currentToolCallId = toolCallId;
         if (stepId) {
           if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
           S.toolsByStep[stepId].push(toolCallId);
-          addToolItem(stepId, toolCallId, evt);
+          addToolChip(stepId, toolCallId, evt);
         }
-        computerPanel.classList.add('visible');
-        S.computerVisible = true;
-        inputArea.classList.add('with-panel');
+        showToolPanel();
       }
 
       if (status === 'called' || status === 'error') {
-        updateToolItem(toolCallId, evt);
+        updateToolChip(toolCallId, evt);
       }
       break;
     }
 
     case 'message_start':
-      // Create fresh AI bubble for streaming response
-      if (S.aiMsgEl) {
-        // finalize previous
-        S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
-        S.aiMsgEl.removeAttribute('id');
+      if (S.aiBodyEl) {
+        S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent);
+        S.aiBodyEl.removeAttribute('id');
       }
-      S.aiMsgEl = createAiMsgEl();
+      S.aiBodyEl = createAiMsg();
       S.aiContent = '';
       break;
 
     case 'message_chunk': {
       const token = evt.chunk || '';
       if (!token) break;
-      if (!S.aiMsgEl) {
-        S.aiMsgEl = createAiMsgEl();
+      if (!S.aiBodyEl) {
+        S.aiBodyEl = createAiMsg();
         S.aiContent = '';
       }
       S.aiContent += token;
-      S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent) + '<span class="cursor"></span>';
+      S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent) + '<span class="cursor"></span>';
       scrollBottom();
       break;
     }
 
     case 'message_end':
-      if (S.aiMsgEl) {
-        S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
-        S.aiMsgEl.removeAttribute('id');
-        S.aiMsgEl = null;
-        S.aiContent = '';
+      if (S.aiBodyEl) {
+        S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent);
+        S.aiBodyEl.removeAttribute('id');
+        S.aiBodyEl = null; S.aiContent = '';
       }
       break;
 
@@ -935,28 +1039,26 @@ function handleEvent(evt) {
 
     case 'error':
       showError(evt.error || 'Terjadi kesalahan');
-      if (S.aiMsgEl) {
-        S.aiMsgEl.innerHTML = `<em style="color:var(--error)">Gagal: ${esc(evt.error || 'Error')}</em>`;
-        S.aiMsgEl = null;
-        S.aiContent = '';
+      if (S.aiBodyEl) {
+        S.aiBodyEl.innerHTML = `<em style="color:var(--error)">Gagal: ${esc(evt.error || 'Error')}</em>`;
+        S.aiBodyEl = null; S.aiContent = '';
       }
       break;
   }
 }
 
 function finalizeResponse() {
-  if (S.aiMsgEl && S.aiContent) {
-    S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
-    S.aiMsgEl.removeAttribute('id');
-  } else if (S.aiMsgEl) {
-    S.aiMsgEl.closest('.msg')?.remove();
+  if (S.aiBodyEl && S.aiContent) {
+    S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent);
+    S.aiBodyEl.removeAttribute('id');
+  } else if (S.aiBodyEl) {
+    S.aiBodyEl.closest('.msg-ai')?.remove();
   }
-  S.aiMsgEl = null;
+  S.aiBodyEl = null;
   S.aiContent = '';
   S.currentStepId = null;
   setStreaming(false);
-  scrollBottom();
-  // Don't hide computer panel — let user see result
+  scrollBottom(true);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -973,13 +1075,15 @@ async function sendMessage() {
   appendUserMsg(text);
   messageHistory.push({ role: 'user', content: text });
 
-  // Reset state for new message
-  S.planCardEl = null;
+  S.plan = null;
   S.stepEls = {};
   S.toolEls = {};
   S.toolsByStep = {};
-  S.plan = null;
   S.currentStepId = null;
+  S.currentToolCallId = null;
+  planBar.classList.remove('visible');
+  tpToolInfo.style.display = 'none';
+  tpFooterStatus.textContent = 'Memproses...';
 
   setStreaming(true);
   S.abortController = new AbortController();
@@ -1019,11 +1123,8 @@ async function sendMessage() {
   } catch (err) {
     if (err.name === 'AbortError') return;
     console.error(err);
-    if (S.aiMsgEl) {
-      S.aiMsgEl.innerHTML = '<em style="color:var(--error)">Koneksi gagal. Coba lagi.</em>';
-      S.aiMsgEl = null;
-    }
-    showError('Gagal terhubung ke AI. Periksa koneksi.');
+    if (S.aiBodyEl) { S.aiBodyEl.innerHTML = '<em style="color:var(--error)">Koneksi gagal. Coba lagi.</em>'; S.aiBodyEl = null; }
+    showError('Gagal terhubung ke AI.');
     setStreaming(false);
   }
 }
@@ -1042,9 +1143,6 @@ function sendSuggestion(el) {
 inputEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && S.computerFullscreen) toggleComputerFullscreen();
-});
 
 inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto';
@@ -1055,13 +1153,15 @@ inputEl.addEventListener('input', () => {
 // Screenshot modal
 // ═══════════════════════════════════════════════════════════
 function openScreenshot(src) {
-  const modal = document.getElementById('screenshot-modal');
   document.getElementById('screenshot-modal-img').src = src;
-  modal.classList.add('open');
+  document.getElementById('screenshot-modal').classList.add('open');
 }
 function closeScreenshot() {
   document.getElementById('screenshot-modal').classList.remove('open');
 }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeScreenshot();
+});
 
 // ═══════════════════════════════════════════════════════════
 // Init

@@ -16,3 +16,5 @@ playwright
 pydantic
 redis
 requests
+websockify
+websockify
