@@ -93,6 +93,7 @@ export default function ChatScreen() {
   const streamingMsgIdRef = useRef<string | null>(null);
   const currentStepIdRef = useRef<string | null>(null);
   const planViewAddedRef = useRef<boolean>(false);
+  const computerViewAddedRef = useRef<boolean>(false);
 
   const scrollToBottom = useCallback((animated = true) => {
     setTimeout(
@@ -237,6 +238,7 @@ export default function ChatScreen() {
       streamingMsgIdRef.current = null;
       currentStepIdRef.current = null;
       planViewAddedRef.current = false;
+      computerViewAddedRef.current = false;
 
       const userItem: ChatListItem = {
         kind: "chat",
@@ -348,8 +350,15 @@ export default function ChatScreen() {
                 });
               }
 
-              // Track browser state for computer view
+              // Track browser state and add computer view on first browser tool
               if (event.function_name?.startsWith("browser_")) {
+                if (!computerViewAddedRef.current) {
+                  computerViewAddedRef.current = true;
+                  setAgentEvents((prev) => [
+                    ...prev,
+                    { kind: "computer_view", id: "computer-view" },
+                  ]);
+                }
                 setBrowserState((prev) => ({
                   url: (event.function_args?.url as string) || prev?.url || "",
                   title: prev?.title || "",
@@ -530,6 +539,7 @@ export default function ChatScreen() {
     streamingMsgIdRef.current = null;
     currentStepIdRef.current = null;
     planViewAddedRef.current = false;
+    computerViewAddedRef.current = false;
   }, [isGenerating]);
 
   const toggleMode = useCallback(() => {
