@@ -20,7 +20,11 @@ Cross-platform AI chat + autonomous agent app built with Expo (React Native) and
 - **Chat Mode**: Real-time streaming via Cloudflare Workers AI SSE
 - **Agent Mode**: Async autonomous Plan-Act agent with real tool execution
 - **Session Persistence**: Full MongoDB session history with Redis cache
-- **Browser Automation**: Playwright-powered real browser (with HTTP fallback)
+- **Browser Automation**: Playwright-powered real browser with live JPEG screenshot capture (base64) streamed to frontend
+- **Komputer Manus View**: ComputerView component shows compact inline card with live screenshot; tap to open full-screen modal with URL bar, screenshot, "Ambil kendali" button, Live indicator, and plan bottom bar
+- **Perencana Plan View**: AgentPlanView shows "Perencana" header with step count (X/Y), expandable steps with result text and tool sub-rows
+- **Expandable Tool Cards**: AgentToolCard shows colored left accent bar, icon, label, expandable inline content (shell/search/browser/file) — no modals
+- **message_notify_user streaming**: Intercepted as streaming message_start/chunk/end events → chat bubbles
 - **Session Resume/Rollback**: Resume interrupted sessions, rollback to any step
 - **DDD Architecture**: Clean separation of domain, application, and infrastructure
 

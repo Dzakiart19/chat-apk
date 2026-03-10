@@ -396,8 +396,9 @@ export default function ChatScreen() {
               if (event.function_name?.startsWith("browser_") && event.tool_content) {
                 setBrowserState((prev) => ({
                   url: (event.tool_content?.url as string) || prev?.url || "",
-                  title: (event.tool_content?.title as string) || "",
-                  content: (event.tool_content?.content as string) || "",
+                  title: (event.tool_content?.title as string) || prev?.title || "",
+                  content: (event.tool_content?.content as string) || prev?.content || "",
+                  screenshot: (event.tool_content?.screenshot_b64 as string) || prev?.screenshot,
                   isLoading: false,
                 }));
               }
@@ -577,6 +578,7 @@ export default function ChatScreen() {
         return (
           <ComputerView
             browserState={browserState}
+            plan={currentPlan}
             onClose={() => setBrowserState(null)}
           />
         );

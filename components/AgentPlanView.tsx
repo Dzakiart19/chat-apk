@@ -117,8 +117,8 @@ function StepCard({ step, isLast }: { step: AgentPlanStep; isLast: boolean }) {
         <View style={styles.stepBody}>
           <TouchableOpacity
             style={styles.stepHeader}
-            onPress={() => tools.length > 0 && setExpanded(!expanded)}
-            activeOpacity={tools.length > 0 ? 0.7 : 1}
+            onPress={() => setExpanded(!expanded)}
+            activeOpacity={0.7}
           >
             <Text
               style={[
@@ -131,20 +131,30 @@ function StepCard({ step, isLast }: { step: AgentPlanStep; isLast: boolean }) {
             >
               {step.description}
             </Text>
-            {tools.length > 0 && (
-              <Ionicons
-                name={expanded ? "chevron-up" : "chevron-down"}
-                size={13}
-                color="#636366"
-              />
-            )}
+            <Ionicons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={13}
+              color="#3A3A3F"
+            />
           </TouchableOpacity>
 
-          {expanded && tools.length > 0 && (
-            <View style={styles.toolsList}>
-              {tools.map((tool, i) => (
-                <ToolRow key={`${tool.tool_call_id || i}`} event={tool} />
-              ))}
+          {expanded && (
+            <View style={styles.stepExpandedContent}>
+              {/* Result/status description text */}
+              {(isRunning || isDone) && step.result ? (
+                <Text style={styles.stepResultText} numberOfLines={4}>
+                  {step.result}
+                </Text>
+              ) : null}
+
+              {/* Tool rows */}
+              {tools.length > 0 && (
+                <View style={styles.toolsList}>
+                  {tools.map((tool, i) => (
+                    <ToolRow key={`${tool.tool_call_id || i}`} event={tool} />
+                  ))}
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -174,13 +184,18 @@ export function AgentPlanView({ plan }: AgentPlanViewProps) {
           )}
         </View>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {plan.title || "Menjalankan tugas"}
+          Perencana
         </Text>
-        <Ionicons
-          name={collapsed ? "chevron-down" : "chevron-up"}
-          size={14}
-          color="#636366"
-        />
+        <View style={styles.headerRight}>
+          <Text style={styles.headerCount}>
+            {completedCount} / {totalCount}
+          </Text>
+          <Ionicons
+            name={collapsed ? "chevron-down" : "chevron-up"}
+            size={14}
+            color="#636366"
+          />
+        </View>
       </TouchableOpacity>
 
       {!collapsed && (
@@ -240,6 +255,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#E8E8ED",
     letterSpacing: -0.2,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  headerCount: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#636366",
   },
   collapsedInfo: {
     paddingHorizontal: 14,
@@ -304,8 +329,19 @@ const styles = StyleSheet.create({
   stepDescriptionPending: {
     color: "#444450",
   },
+  stepExpandedContent: {
+    gap: 6,
+  },
+  stepResultText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#8E8E93",
+    lineHeight: 17,
+    letterSpacing: -0.1,
+    paddingRight: 4,
+  },
   toolsList: {
-    marginTop: 6,
+    marginTop: 2,
     gap: 1,
     paddingLeft: 2,
   },

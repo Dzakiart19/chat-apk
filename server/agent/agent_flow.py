@@ -825,6 +825,7 @@ def build_tool_content(tool_name: str, tool_result: ToolResult) -> Optional[Dict
             "title": data.get("title", ""),
             "content": str(data.get("content", data.get("content_snippet", "")))[:2000],
             "save_path": data.get("save_path", ""),
+            "screenshot_b64": data.get("screenshot_b64", ""),
         }
     elif tool_name in ("file_read", "file_write", "file_str_replace",
                        "file_find_by_name", "file_find_in_content",

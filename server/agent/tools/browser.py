@@ -108,19 +108,34 @@ class PlaywrightSession:
             logger.error("[Browser] Failed to start Playwright: %s", e)
             return False
 
+    def _capture_screenshot_b64(self) -> Optional[str]:
+        """Capture viewport screenshot and return as base64 JPEG data URI."""
+        try:
+            import base64
+            data = self._page.screenshot(type="jpeg", quality=55, full_page=False)
+            return "data:image/jpeg;base64," + base64.b64encode(data).decode()
+        except Exception:
+            return None
+
     def navigate(self, url: str) -> ToolResult:
         if not self._started and not self.start():
             return ToolResult(success=False, message="Playwright not available.")
         try:
             self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            self._page.wait_for_timeout(1000)
+            self._page.wait_for_timeout(1200)
             self.current_url = self._page.url
             title = self._page.title()
             content = self._page.inner_text("body")[:8000]
+            screenshot_b64 = self._capture_screenshot_b64()
             return ToolResult(
                 success=True,
                 message=f"Page: {title}\nURL: {self.current_url}\n\n{content}",
-                data={"url": self.current_url, "title": title, "content": content},
+                data={
+                    "url": self.current_url,
+                    "title": title,
+                    "content": content,
+                    "screenshot_b64": screenshot_b64,
+                },
             )
         except Exception as e:
             return ToolResult(success=False, message=f"Navigate failed: {e}",
@@ -132,10 +147,16 @@ class PlaywrightSession:
         try:
             content = self._page.inner_text("body")[:8000]
             title = self._page.title()
+            screenshot_b64 = self._capture_screenshot_b64()
             return ToolResult(
                 success=True,
                 message=f"Page: {title}\nURL: {self.current_url}\n\n{content}",
-                data={"url": self.current_url, "title": title, "content": content},
+                data={
+                    "url": self.current_url,
+                    "title": title,
+                    "content": content,
+                    "screenshot_b64": screenshot_b64,
+                },
             )
         except Exception as e:
             return ToolResult(success=False, message=f"View failed: {e}")
