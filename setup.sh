@@ -4,8 +4,8 @@
 # Installs Node.js (npm) + Python (pip) packages and creates .env file.
 #
 # Usage:
-#   ./scripts/setup.sh          # Install all dependencies
-#   ./scripts/setup.sh --clean  # Clean install (remove existing deps first)
+#   ./setup.sh          # Install all dependencies (run from project root)
+#   ./setup.sh --clean  # Clean install (remove existing deps first)
 #
 
 set -euo pipefail
@@ -19,7 +19,12 @@ NC='\033[0m'
 BOLD='\033[1m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# If setup.sh is at project root (package.json exists here), use SCRIPT_DIR directly
+if [ -f "$SCRIPT_DIR/package.json" ]; then
+  PROJECT_ROOT="$SCRIPT_DIR"
+else
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 
 LOG_DIR="$PROJECT_ROOT/.setup-logs"
 mkdir -p "$LOG_DIR"
@@ -221,11 +226,25 @@ install_playwright_browsers() {
     return 0
   fi
 
-  if $python_cmd -m playwright install chromium --quiet 2>/dev/null; then
-    print_success "Playwright Chromium browser installed"
+  print_step "Installing Playwright Chromium browser binary..."
+  if $python_cmd -m playwright install chromium 2>&1 | tail -5; then
+    print_success "Playwright Chromium browser binary installed"
   else
     print_warning "Could not install Playwright Chromium (HTTP fallback will be used)"
+    return 0
   fi
+
+  # On Replit (NixOS), apt/install-deps doesn't work.
+  # The required system libraries should be installed via Nix packages:
+  #   nspr, nss, mesa, expat, libxkbcommon, glib, dbus, atk, at-spi2-atk
+  #   xorg.libXdamage, xorg.libXrandr, xorg.libXfixes, xorg.libX11
+  #   xorg.libXcomposite, xorg.libXext, xorg.libXcursor, xorg.libXtst
+  #   xorg.libXinerama, xorg.libXi, xorg.libxcb, xorg.libXScrnSaver
+  #   cups, alsa-lib, pango, cairo
+  # These are installed via the Replit System Dependencies panel or packager tool.
+  print_warning "Playwright system deps on Replit: install via Replit System Dependencies (Nix)"
+  echo -e "    ${CYAN}Required: nspr nss mesa expat libxkbcommon glib dbus atk at-spi2-atk${NC}"
+  echo -e "    ${CYAN}         xorg.libXcomposite xorg.libXext cups alsa-lib pango cairo${NC}"
 }
 
 # ─── Verify Functions ──────────────────────────────────────────────────────────

@@ -89,15 +89,30 @@ components/             - UI components (AgentPlanView, AgentToolCard, etc.)
 - `pydantic>=2.0.0` - Pydantic BaseModel data models
 - `motor>=3.7.0` - Async MongoDB driver (AsyncIOMotorClient)
 - `redis>=5.0.0` - Redis async client
-- `playwright>=1.40.0` - Real browser automation
+- `playwright>=1.40.0` - Real browser automation (Chromium)
 - `beautifulsoup4>=4.12.0` - HTML parsing
 - `aiohttp` - Async HTTP client
 - `requests` - Sync HTTP client
+- `g4f` - GPT4Free fallback
+- `flask`, `flask-cors` - Flask (optional)
+
+## Nix System Dependencies (for Playwright Chromium)
+
+Required for Playwright to work on Replit/NixOS:
+- `nspr`, `nss`, `mesa`, `expat`, `libxkbcommon`, `glib`, `dbus`
+- `atk`, `at-spi2-atk`
+- `xorg.libXdamage`, `xorg.libXrandr`, `xorg.libXfixes`, `xorg.libX11`
+- `xorg.libXcomposite`, `xorg.libXext`, `xorg.libXcursor`, `xorg.libXtst`
+- `xorg.libXinerama`, `xorg.libXi`, `xorg.libxcb`, `xorg.libXScrnSaver`
+- `cups`, `alsa-lib`, `pango`, `cairo`
 
 ## Key Technical Notes
 
 ### Async Agent Flow (AsyncGenerator)
 The agent uses Python's `AsyncGenerator` pattern - events are yielded as they happen, enabling true real-time streaming without blocking.
+
+### True Real-Time Streaming (asyncio.Queue bridge)
+`call_cf_streaming_realtime()` uses an `asyncio.Queue` to bridge the sync urllib thread with the async generator. Cloudflare chunks are pushed to the queue from a thread via `loop.call_soon_threadsafe()` and yielded immediately - no buffering, no fake streaming.
 
 ### Session Persistence
 - **MongoDB Atlas**: Stores full session documents (plan, steps, events, metadata)

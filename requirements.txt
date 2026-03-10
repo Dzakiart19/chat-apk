@@ -8,3 +8,11 @@ g4f
 motor
 playwright
 redis
+aiohttp
+beautifulsoup4
+g4f
+motor
+playwright
+pydantic
+redis
+requests

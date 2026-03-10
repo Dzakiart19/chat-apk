@@ -22,6 +22,7 @@ import asyncio
 import traceback
 import urllib.request
 import urllib.error
+import concurrent.futures
 from enum import Enum
 from typing import AsyncGenerator, Optional, Dict, Any, List
 
@@ -575,6 +576,76 @@ def call_cf_streaming(messages: list) -> str:
         sys.stderr.write("CF streaming error: {}\n".format(e))
         sys.stderr.flush()
     return full_text
+
+
+async def call_cf_streaming_realtime(
+    messages: list,
+) -> AsyncGenerator[str, None]:
+    """
+    True async streaming from Cloudflare AI.
+    Yields text chunks as they arrive in real-time using asyncio.Queue.
+    """
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _stream_worker() -> None:
+        url = _get_cf_url()
+        body: Dict[str, Any] = {"messages": messages, "max_tokens": 4096, "stream": True}
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer {}".format(CF_API_KEY),
+                "User-Agent": "DzeckAI/2.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                buf = ""
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8", errors="replace")
+                    buf += line
+                    while "\n" in buf:
+                        chunk_line, buf = buf.split("\n", 1)
+                        chunk_line = chunk_line.strip()
+                        if not chunk_line or not chunk_line.startswith("data: "):
+                            continue
+                        payload = chunk_line[6:]
+                        if payload == "[DONE]":
+                            loop.call_soon_threadsafe(queue.put_nowait, None)
+                            return
+                        try:
+                            parsed = json.loads(payload)
+                            content = (
+                                parsed.get("response")
+                                or (parsed.get("choices", [{}])[0].get("delta", {}).get("content"))
+                                or ""
+                            )
+                            if content:
+                                loop.call_soon_threadsafe(queue.put_nowait, content)
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            pass
+        except Exception as e:
+            sys.stderr.write("CF realtime streaming error: {}\n".format(e))
+            sys.stderr.flush()
+        loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = loop.run_in_executor(executor, _stream_worker)
+    try:
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+    finally:
+        try:
+            await future
+        except Exception:
+            pass
+        executor.shutdown(wait=False)
 
 
 def call_cf_api(
@@ -1206,7 +1277,7 @@ class DzeckAgent:
         plan: Plan,
         user_message: str,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Generate summary and yield streaming message events."""
+        """Generate summary and yield streaming message events (real-time streaming)."""
         self.state = FlowState.SUMMARIZING
         step_results = []
         for s in plan.steps:
@@ -1227,46 +1298,16 @@ class DzeckAgent:
             {"role": "user", "content": prompt},
         ]
 
-        loop = asyncio.get_event_loop()
         try:
-            raw = await loop.run_in_executor(
-                None, lambda: call_cf_streaming(messages)
-            )
-            if not raw:
-                raw = "Task completed successfully."
-
-            full_text = raw
-            clean = raw.strip()
-            if clean.startswith("{"):
-                try:
-                    parsed_summary = json.loads(clean)
-                    if "message" in parsed_summary:
-                        full_text = parsed_summary["message"]
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            elif clean.startswith("```"):
-                try:
-                    inner = re.search(r"```(?:json)?\s*([\s\S]*?)```", clean)
-                    if inner:
-                        parsed_summary = json.loads(inner.group(1).strip())
-                        if "message" in parsed_summary:
-                            full_text = parsed_summary["message"]
-                except (json.JSONDecodeError, ValueError, AttributeError):
-                    pass
-
             yield make_event("message_start", role="assistant")
-            buf = ""
-            for ch in full_text:
-                buf += ch
-                if ch in (" ", "\n", ".", ",", "!", "?", ":", ";"):
-                    if buf:
-                        yield make_event("message_chunk", chunk=buf, role="assistant")
-                        await asyncio.sleep(0.005)
-                        buf = ""
-            if buf:
-                yield make_event("message_chunk", chunk=buf, role="assistant")
+            got_any = False
+            async for chunk in call_cf_streaming_realtime(messages):
+                if chunk:
+                    got_any = True
+                    yield make_event("message_chunk", chunk=chunk, role="assistant")
+            if not got_any:
+                yield make_event("message_chunk", chunk="Task completed successfully.", role="assistant")
             yield make_event("message_end", role="assistant")
-
         except Exception:
             yield make_event("message_start", role="assistant")
             yield make_event("message_chunk", chunk="Task completed.", role="assistant")
@@ -1276,7 +1317,7 @@ class DzeckAgent:
         self,
         user_message: str,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Respond directly without Plan-Act for simple queries."""
+        """Respond directly without Plan-Act for simple queries (real-time streaming)."""
         messages = [
             {"role": "system", "content": (
                 "You are Dzeck, an AI assistant. Respond naturally and helpfully. "
@@ -1285,39 +1326,15 @@ class DzeckAgent:
             )},
             {"role": "user", "content": user_message},
         ]
-        loop = asyncio.get_event_loop()
         try:
-            raw = await loop.run_in_executor(
-                None, lambda: call_cf_streaming(messages)
-            )
-            if not raw:
-                raw = "I'm sorry, I couldn't generate a response."
-
-            full_text = raw
-            clean = raw.strip()
-            if clean.startswith("{"):
-                try:
-                    parsed_direct = json.loads(clean)
-                    full_text = (
-                        parsed_direct.get("message")
-                        or parsed_direct.get("response")
-                        or parsed_direct.get("content")
-                        or raw
-                    )
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
             yield make_event("message_start", role="assistant")
-            buf = ""
-            for ch in full_text:
-                buf += ch
-                if ch in (" ", "\n", ".", ",", "!", "?", ":", ";"):
-                    if buf:
-                        yield make_event("message_chunk", chunk=buf, role="assistant")
-                        await asyncio.sleep(0.005)
-                        buf = ""
-            if buf:
-                yield make_event("message_chunk", chunk=buf, role="assistant")
+            got_any = False
+            async for chunk in call_cf_streaming_realtime(messages):
+                if chunk:
+                    got_any = True
+                    yield make_event("message_chunk", chunk=chunk, role="assistant")
+            if not got_any:
+                yield make_event("message_chunk", chunk="I'm sorry, I couldn't generate a response.", role="assistant")
             yield make_event("message_end", role="assistant")
         except Exception as e:
             yield make_event("error", error="Response error: {}".format(e))
@@ -1372,16 +1389,7 @@ class DzeckAgent:
 
             if self.plan.message:
                 yield make_event("message_start", role="assistant")
-                buf = ""
-                for ch in self.plan.message:
-                    buf += ch
-                    if ch in (" ", "\n", ".", ","):
-                        if buf:
-                            yield make_event("message_chunk", chunk=buf, role="assistant")
-                            await asyncio.sleep(0.005)
-                            buf = ""
-                if buf:
-                    yield make_event("message_chunk", chunk=buf, role="assistant")
+                yield make_event("message_chunk", chunk=self.plan.message, role="assistant")
                 yield make_event("message_end", role="assistant")
 
             yield make_event("plan", status=PlanStatus.CREATED.value, plan=safe_plan_dict(self.plan))
