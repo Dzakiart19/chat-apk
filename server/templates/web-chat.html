@@ -699,7 +699,7 @@ function updateToolChip(toolCallId, evt) {
             const thumb = document.createElement('div');
             thumb.id = `chip-thumb-${toolCallId}`;
             thumb.className = 'tool-screenshot-inline';
-            thumb.innerHTML = `<img src="${src}" alt="screenshot" onclick="openScreenshot('${src.replace(/'/g,'\\'')}')"/>`;
+            thumb.innerHTML = `<img src="${src}" alt="screenshot" onclick="openScreenshot(this.src)"/>`;
             toolsEl.appendChild(thumb);
           } else {
             existThumb.querySelector('img').src = src;
