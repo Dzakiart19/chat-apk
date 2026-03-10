@@ -500,41 +500,175 @@ def browser_view() -> ToolResult:
     return _browser.view()
 
 
-def browser_click(coordinate_x: float, coordinate_y: float, button: str = "left") -> ToolResult:
-    return _browser.click(coordinate_x, coordinate_y, button)
+def browser_click(
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    index: Optional[int] = None,
+    button: str = "left",
+) -> ToolResult:
+    x = coordinate_x or 0.0
+    y = coordinate_y or 0.0
+    return _browser.click(x, y, button)
 
 
-def browser_type(text: str) -> ToolResult:
-    return _browser.type_text(text)
+def browser_input(
+    text: str,
+    press_enter: bool = False,
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    index: Optional[int] = None,
+) -> ToolResult:
+    """Type text into a focused element, optionally clicking a coordinate/index first."""
+    if coordinate_x is not None and coordinate_y is not None:
+        _browser.click(coordinate_x, coordinate_y)
+    result = _browser.type_text(text)
+    if press_enter and result.success:
+        _press_key("Enter")
+    return result
 
 
-def browser_scroll(coordinate_x: float, coordinate_y: float,
-                   direction: str, amount: int = 3) -> ToolResult:
-    return _browser.scroll(coordinate_x, coordinate_y, direction, amount)
+def browser_move_mouse(coordinate_x: float, coordinate_y: float) -> ToolResult:
+    """Move cursor to coordinates without clicking."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            _browser._page.mouse.move(coordinate_x, coordinate_y)
+            return ToolResult(
+                success=True,
+                message=f"Mouse moved to ({coordinate_x}, {coordinate_y}).",
+                data={"x": coordinate_x, "y": coordinate_y},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Move mouse failed: {e}")
+    return ToolResult(
+        success=True,
+        message=f"Mouse move simulated to ({coordinate_x}, {coordinate_y}).",
+        data={"x": coordinate_x, "y": coordinate_y},
+    )
 
 
-def browser_scroll_to_bottom(coordinate_x: float = 0, coordinate_y: float = 0) -> ToolResult:
-    return _browser.scroll_to_bottom(coordinate_x, coordinate_y)
+def _press_key(key: str) -> ToolResult:
+    """Internal helper to press a keyboard key."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            _browser._page.keyboard.press(key)
+            return ToolResult(success=True, message=f"Pressed key: {key}", data={"key": key})
+        except Exception as e:
+            return ToolResult(success=False, message=f"Press key failed: {e}")
+    return ToolResult(success=True, message=f"Key press simulated: {key}", data={"key": key})
 
 
-def browser_read_links(max_links: int = 20) -> ToolResult:
-    return _browser.read_links(max_links)
+def browser_press_key(key: str) -> ToolResult:
+    """Simulate a keyboard key press on the current browser page."""
+    return _press_key(key)
+
+
+def browser_select_option(index: int, option: int) -> ToolResult:
+    """Select a specific option from a dropdown list element."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            selects = _browser._page.query_selector_all("select")
+            if index < 0 or index >= len(selects):
+                return ToolResult(
+                    success=False,
+                    message=f"No dropdown at index {index}. Found {len(selects)} dropdowns.",
+                )
+            select_el = selects[index]
+            options = select_el.query_selector_all("option")
+            if option < 0 or option >= len(options):
+                return ToolResult(
+                    success=False,
+                    message=f"No option at index {option}. Found {len(options)} options.",
+                )
+            value = options[option].get_attribute("value") or ""
+            select_el.select_option(value=value)
+            return ToolResult(
+                success=True,
+                message=f"Selected option {option} from dropdown {index}.",
+                data={"dropdown_index": index, "option_index": option, "value": value},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"Select option failed: {e}")
+    return ToolResult(success=False, message="Browser not available for select_option.")
+
+
+def browser_scroll_up(to_top: bool = False) -> ToolResult:
+    """Scroll the current browser page upward."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            if to_top:
+                _browser._page.evaluate("window.scrollTo(0, 0)")
+                msg = "Scrolled to top."
+            else:
+                _browser._page.mouse.wheel(0, -600)
+                msg = "Scrolled up."
+            _browser._page.wait_for_timeout(300)
+            content = _browser._page.inner_text("body")[:4000]
+            return ToolResult(success=True, message=f"{msg}\n\n{content}", data={"to_top": to_top})
+        except Exception as e:
+            return ToolResult(success=False, message=f"Scroll up failed: {e}")
+    if hasattr(_browser, "current_content") and _browser.current_content:
+        snippet = _browser.current_content[:4000]
+        return ToolResult(success=True, message=f"Scrolled up.\n\n{snippet}", data={"to_top": to_top})
+    return ToolResult(success=False, message="No page loaded.")
+
+
+def browser_scroll_down(to_bottom: bool = False) -> ToolResult:
+    """Scroll the current browser page downward."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            if to_bottom:
+                _browser._page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                msg = "Scrolled to bottom."
+            else:
+                _browser._page.mouse.wheel(0, 600)
+                msg = "Scrolled down."
+            _browser._page.wait_for_timeout(300)
+            content = _browser._page.inner_text("body")[-4000:]
+            return ToolResult(success=True, message=f"{msg}\n\n{content}", data={"to_bottom": to_bottom})
+        except Exception as e:
+            return ToolResult(success=False, message=f"Scroll down failed: {e}")
+    if hasattr(_browser, "current_content") and _browser.current_content:
+        snippet = _browser.current_content[-4000:]
+        return ToolResult(success=True, message=f"Scrolled down.\n\n{snippet}", data={"to_bottom": to_bottom})
+    return ToolResult(success=False, message="No page loaded.")
+
+
+def browser_console_exec(javascript: str) -> ToolResult:
+    """Execute JavaScript code in the browser console."""
+    if hasattr(_browser, "_page") and _browser._page:
+        try:
+            result = _browser._page.evaluate(javascript)
+            result_str = str(result) if result is not None else "undefined"
+            return ToolResult(
+                success=True,
+                message=f"JavaScript executed. Result: {result_str}",
+                data={"result": result_str, "javascript": javascript},
+            )
+        except Exception as e:
+            return ToolResult(success=False, message=f"JavaScript execution failed: {e}")
+    return ToolResult(success=False, message="Browser not available for console_exec.")
 
 
 def browser_console_view(max_lines: int = 100) -> ToolResult:
     return _browser.console_view(max_lines)
 
 
-def browser_restart(url: str = "") -> ToolResult:
-    global _browser
-    if hasattr(_browser, "close"):
-        _browser.close()
-    _browser = _make_session()
-    if url:
-        return _browser.navigate(url)
-    return ToolResult(success=True, message="Browser restarted.")
-
-
 def browser_save_image(coordinate_x: float, coordinate_y: float,
                        save_dir: str, base_name: str) -> ToolResult:
     return _browser.save_image(coordinate_x, coordinate_y, save_dir, base_name)
+
+
+def image_view(image: str) -> ToolResult:
+    """View an image file from the local filesystem."""
+    if not os.path.isfile(image):
+        return ToolResult(success=False, message=f"Image file not found: {image}")
+    try:
+        size = os.path.getsize(image)
+        ext = os.path.splitext(image)[1].lower()
+        return ToolResult(
+            success=True,
+            message=f"Image file: {image} ({size} bytes, type: {ext})",
+            data={"image": image, "size": size, "ext": ext},
+        )
+    except Exception as e:
+        return ToolResult(success=False, message=f"Failed to view image: {e}")

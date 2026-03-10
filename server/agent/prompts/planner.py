@@ -14,7 +14,7 @@ Rules:
 4. Keep steps focused and specific
 5. Include verification steps where appropriate
 6. Respond in the user's language when possible
-7. Steps must be achievable using available tools: shell_exec, file_read, file_write, file_str_replace, file_find_by_name, file_find_in_content, web_search, web_browse, browser_navigate, browser_view, browser_click, browser_type, browser_scroll, browser_read_links, image_view, message_notify_user, message_ask_user, mcp_call_tool, mcp_list_tools
+7. Steps must be achievable using available tools: shell_exec, file_read, file_write, file_str_replace, image_view, info_search_web, browser_navigate, browser_view, browser_click, browser_input, browser_move_mouse, browser_press_key, browser_select_option, browser_scroll_up, browser_scroll_down, browser_console_exec, browser_console_view, browser_save_image, message_notify_user, message_ask_user, idle
 """
 
 CREATE_PLAN_PROMPT = """Analyze the following user request and create an execution plan.
