@@ -1,29 +1,54 @@
 """
 File operation tools for the AI agent.
 Ported from ai-manus: app/domain/services/tools/file.py
-Provides file read, write, string replace, and find capabilities.
 """
 import os
 import re
 import glob as glob_module
-from typing import Optional
+from typing import Optional, Any
 
 from server.agent.models.tool_result import ToolResult
 
 
-def file_read(file: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> ToolResult:
-    """Read the contents of a file.
+def _to_bool(v: Any, default: bool = False) -> bool:
+    """Safely coerce a value to bool (handles string 'false'/'true')."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() not in ("false", "0", "no", "none", "null", "")
+    if v is None:
+        return default
+    return bool(v)
 
-    Matching ai-manus file_read tool interface.
+
+def _to_int_or_none(v: Any) -> Optional[int]:
+    """Safely coerce a value to int or None (handles string 'null')."""
+    if v is None:
+        return None
+    if isinstance(v, str) and v.strip().lower() in ("null", "none", ""):
+        return None
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        return None
+
+
+def file_read(
+    file: str,
+    start_line: Optional[Any] = None,
+    end_line: Optional[Any] = None,
+    **kwargs,
+) -> ToolResult:
+    """Read the contents of a file.
 
     Args:
         file: Absolute path to the file
         start_line: Optional starting line (1-based)
         end_line: Optional ending line (inclusive)
-
-    Returns:
-        ToolResult with file content
     """
+    start_line = _to_int_or_none(start_line)
+    end_line = _to_int_or_none(end_line)
+
     try:
         if not os.path.isfile(file):
             return ToolResult(
@@ -38,21 +63,15 @@ def file_read(file: str, start_line: Optional[int] = None, end_line: Optional[in
         total_lines = len(lines)
 
         if start_line is not None or end_line is not None:
-            start = (start_line or 1) - 1  # Convert to 0-based
-            end = end_line or total_lines
+            start = (start_line or 1) - 1
+            end = end_line if end_line is not None else total_lines
             selected_lines = lines[start:end]
-            # Add line numbers
-            numbered = []
-            for i, line in enumerate(selected_lines, start=start + 1):
-                numbered.append(f"{i:4d} | {line.rstrip()}")
+            numbered = [f"{i:4d} | {line.rstrip()}" for i, line in enumerate(selected_lines, start=start + 1)]
             content = "\n".join(numbered)
         else:
-            numbered = []
-            for i, line in enumerate(lines, start=1):
-                numbered.append(f"{i:4d} | {line.rstrip()}")
+            numbered = [f"{i:4d} | {line.rstrip()}" for i, line in enumerate(lines, start=1)]
             content = "\n".join(numbered)
 
-        # Truncate very large files
         max_chars = 15000
         if len(content) > max_chars:
             content = content[:max_chars] + "\n\n[File truncated...]"
@@ -74,24 +93,24 @@ def file_read(file: str, start_line: Optional[int] = None, end_line: Optional[in
 def file_write(
     file: str,
     content: str,
-    append: bool = False,
-    leading_newline: bool = False,
-    trailing_newline: bool = True,
+    append: Any = False,
+    leading_newline: Any = False,
+    trailing_newline: Any = True,
+    **kwargs,
 ) -> ToolResult:
-    """Write content to a file (create or overwrite).
-
-    Matching ai-manus file_write tool interface.
+    """Overwrite or append content to a file.
 
     Args:
         file: Absolute path to the file
         content: Content to write
-        append: Whether to append instead of overwrite
+        append: Whether to append instead of overwrite (default False)
         leading_newline: Add newline before content
         trailing_newline: Add newline after content
-
-    Returns:
-        ToolResult with write status
     """
+    append = _to_bool(append, default=False)
+    leading_newline = _to_bool(leading_newline, default=False)
+    trailing_newline = _to_bool(trailing_newline, default=True)
+
     try:
         parent_dir = os.path.dirname(file)
         if parent_dir and not os.path.exists(parent_dir):
@@ -122,18 +141,18 @@ def file_write(
         )
 
 
-def file_str_replace(file: str, old_str: str, new_str: str) -> ToolResult:
+def file_str_replace(
+    file: str,
+    old_str: str,
+    new_str: str,
+    **kwargs,
+) -> ToolResult:
     """Replace a string in a file.
-
-    Matching ai-manus file_str_replace tool interface.
 
     Args:
         file: Absolute path to the file
         old_str: String to find and replace
         new_str: Replacement string
-
-    Returns:
-        ToolResult with replacement status
     """
     try:
         if not os.path.isfile(file):
@@ -173,68 +192,90 @@ def file_str_replace(file: str, old_str: str, new_str: str) -> ToolResult:
         )
 
 
-def file_find_in_content(file: str, regex: str) -> ToolResult:
-    """Search for a pattern in a file using regex.
-
-    Matching ai-manus file_find_in_content tool interface.
+def file_find_in_content(
+    path: str,
+    glob: str = "**/*",
+    pattern: str = "",
+    **kwargs,
+) -> ToolResult:
+    """Search for pattern in files matching glob under path.
 
     Args:
-        file: Absolute path to the file
-        regex: Regular expression pattern to search for
-
-    Returns:
-        ToolResult with matching lines
+        path: Directory path to search in
+        glob: Glob pattern to filter files (e.g., '*.py', '**/*.ts')
+        pattern: Text/regex pattern to search for in file content
     """
     try:
-        if not os.path.isfile(file):
+        if not os.path.isdir(path):
             return ToolResult(
                 success=False,
-                message=f"File not found: {file}",
-                data={"error": "not_found", "file": file},
+                message=f"Directory not found: {path}",
+                data={"error": "not_found", "path": path},
             )
 
-        with open(file, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+        search_pattern = os.path.join(path, glob)
+        files = glob_module.glob(search_pattern, recursive=True)
+        files = [f for f in files if os.path.isfile(f)]
 
-        pattern = re.compile(regex)
+        if not pattern:
+            file_list = "\n".join(files[:50])
+            return ToolResult(
+                success=True,
+                message=f"Found {len(files)} files matching '{glob}' in {path}:\n{file_list}",
+                data={"path": path, "glob": glob, "files": files[:50], "count": len(files)},
+            )
+
+        try:
+            regex = re.compile(pattern)
+        except re.error:
+            regex = re.compile(re.escape(pattern))
+
         matches = []
-        for i, line in enumerate(lines, start=1):
-            if pattern.search(line):
-                matches.append(f"{i:4d} | {line.rstrip()}")
+        for fpath in files[:200]:
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                    for i, line in enumerate(f, start=1):
+                        if regex.search(line):
+                            matches.append(f"{fpath}:{i}: {line.rstrip()}")
+                            if len(matches) >= 100:
+                                break
+            except Exception:
+                continue
+            if len(matches) >= 100:
+                break
 
         if not matches:
             return ToolResult(
                 success=True,
-                message=f"No matches found for '{regex}' in {file}",
-                data={"file": file, "regex": regex, "matches": [], "count": 0},
+                message=f"No matches found for '{pattern}' in {path}/{glob}",
+                data={"path": path, "glob": glob, "pattern": pattern, "matches": [], "count": 0},
             )
 
-        result_text = "\n".join(matches[:50])  # Limit to 50 matches
+        result_text = "\n".join(matches[:50])
         return ToolResult(
             success=True,
-            message=f"Found {len(matches)} match(es) in {file}:\n{result_text}",
-            data={"file": file, "regex": regex, "matches": matches[:50], "count": len(matches)},
+            message=f"Found {len(matches)} match(es) for '{pattern}':\n{result_text}",
+            data={"path": path, "glob": glob, "pattern": pattern, "matches": matches[:50], "count": len(matches)},
         )
 
     except Exception as e:
         return ToolResult(
             success=False,
-            message=f"Failed to search file: {str(e)}",
-            data={"error": str(e), "file": file},
+            message=f"Failed to search: {str(e)}",
+            data={"error": str(e), "path": path},
         )
 
 
-def file_find_by_name(path: str, glob: str = "*") -> ToolResult:
+def file_find_by_name(
+    path: str,
+    glob: str = "*",
+    **kwargs,
+) -> ToolResult:
     """Find files matching a glob pattern in a directory.
-
-    Matching ai-manus file_find_by_name tool interface.
 
     Args:
         path: Directory path to search in
         glob: Glob pattern (e.g., '*.py', '**/*.ts')
-
-    Returns:
-        ToolResult with matching files
     """
     try:
         if not os.path.isdir(path):
@@ -247,7 +288,6 @@ def file_find_by_name(path: str, glob: str = "*") -> ToolResult:
         search_pattern = os.path.join(path, glob)
         files = glob_module.glob(search_pattern, recursive=True)
 
-        # Limit results
         max_files = 100
         truncated = len(files) > max_files
         files = sorted(files)[:max_files]

@@ -354,6 +354,31 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "file_find_by_name",
+        "description": "Find files by name pattern under a directory.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory path to search in"},
+                "glob": {"type": "string", "description": "Glob pattern e.g. *.py or **/*.ts"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "file_find_in_content",
+        "description": "Search for text or regex pattern in files matching a glob under a directory.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory path to search in"},
+                "glob": {"type": "string", "description": "Glob pattern to filter files"},
+                "pattern": {"type": "string", "description": "Text or regex pattern to search for"},
+            },
+            "required": ["path", "pattern"],
+        },
+    },
+    {
         "name": "image_view",
         "description": "View image content.",
         "parameters": {

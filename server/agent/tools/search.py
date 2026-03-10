@@ -45,6 +45,8 @@ def info_search_web(
             url += f"&df={df_param}"
 
         ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(
             url,
             headers={
@@ -123,6 +125,8 @@ def web_search(query: str, num_results: int = 5) -> ToolResult:
         url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
 
         ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(
             url,
             headers={
@@ -204,6 +208,8 @@ def web_browse(url: str) -> ToolResult:
     """
     try:
         ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(
             url,
             headers={
