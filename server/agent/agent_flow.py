@@ -841,6 +841,17 @@ def build_tool_content(tool_name: str, tool_result: ToolResult) -> Optional[Dict
     return None
 
 
+def _coerce_bool(value: Any, default: bool = True) -> bool:
+    """Safely coerce a value (including LLM string 'true'/'false') to Python bool."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in ("false", "0", "no", "")
+    if value is None:
+        return default
+    return bool(value)
+
+
 def safe_plan_dict(plan: Plan) -> Dict[str, Any]:
     d = plan.to_dict()
     d.pop("goal", None)
@@ -1112,7 +1123,7 @@ class DzeckAgent:
         """
         if fn_name in ("idle", "task_complete"):
             step.status = ExecutionStatus.COMPLETED
-            step.success = fn_args.get("success", True)
+            step.success = _coerce_bool(fn_args.get("success"), default=True)
             step.result = fn_args.get("result", "Step completed")
             if not step.success:
                 step.status = ExecutionStatus.FAILED
@@ -1124,6 +1135,24 @@ class DzeckAgent:
         resolved = resolve_tool_name(fn_name)
         if resolved is None:
             yield {"type": "__result__", "value": "Unknown tool '{}'.".format(fn_name)}
+            return
+
+        # ── Special: message tools → emit as streaming chat bubbles, not tool cards ──
+        if resolved in ("message_notify_user", "message_ask_user"):
+            text = fn_args.get("text", "") or fn_args.get("message", "")
+            if text:
+                yield make_event("message_start", role="assistant")
+                chunk_size = 10
+                for i in range(0, len(text), chunk_size):
+                    yield make_event("message_chunk", chunk=text[i:i + chunk_size], role="assistant")
+                    await asyncio.sleep(0.008)
+                yield make_event("message_end", role="assistant")
+            # Execute the tool silently (returns ToolResult.success=True)
+            _res = resolved
+            _args = dict(fn_args)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: execute_tool(_res, _args))
+            yield {"type": "__result__", "value": text or "Done"}
             return
 
         toolkit_name = get_toolkit_name(resolved)
@@ -1138,10 +1167,7 @@ class DzeckAgent:
             tool_call_id=tool_call_id,
         )
 
-        # message_notify_user and message_ask_user are rendered as plain text
-        # directly by AgentToolCard on the frontend — no separate event needed.
-
-        # ── 3. Execute the tool (await = real async, unblocks event loop) ──
+        # ── 2. Execute the tool (await = real async, unblocks event loop) ──
         loop = asyncio.get_event_loop()
         _res = resolved
         _args = dict(fn_args)
@@ -1153,7 +1179,7 @@ class DzeckAgent:
         result_status = ToolStatus.CALLED if tool_result.success else ToolStatus.ERROR
         fn_result = str(tool_result.message)[:3000] if tool_result.message else ""
 
-        # ── 4. Emit result event ──
+        # ── 3. Emit result event ──
         yield make_event(
             "tool",
             status=result_status.value,
@@ -1257,7 +1283,7 @@ class DzeckAgent:
 
                     if parsed.get("done"):
                         step.status = ExecutionStatus.COMPLETED
-                        step.success = parsed.get("success", True)
+                        step.success = _coerce_bool(parsed.get("success"), default=True)
                         step.result = parsed.get("result", "Step completed")
                         if not step.success:
                             step.status = ExecutionStatus.FAILED
@@ -1401,11 +1427,10 @@ class DzeckAgent:
             message=user_message,
         )
         summarize_system = (
-            SYSTEM_PROMPT
-            + "\n\nCRITICAL INSTRUCTION: You MUST respond with PLAIN TEXT ONLY. "
-            "NEVER output JSON, markdown code blocks, or any structured format. "
-            "Write natural language sentences only. "
-            "If you output JSON or a code block, the user will see broken text."
+            "You are Dzeck, a helpful AI assistant. "
+            "Write a clear, natural summary in plain text. "
+            "Never output JSON or code blocks. "
+            "Use the same language as the user."
         )
         messages = [
             {"role": "system", "content": summarize_system},

@@ -214,12 +214,7 @@ SUMMARIZE_PROMPT = """The task has been completed. Here are the results of all s
 
 Original user request: {message}
 
-Provide a clear, helpful summary of everything that was accomplished.
-Respond in the same language as the user's original message.
-
-Respond with ONLY this JSON format:
-{{
-    "message": "Detailed summary of everything accomplished, formatted nicely for the user",
-    "attachments": []
-}}
-"""
+Write a clear, helpful summary of everything that was accomplished.
+Use the same language as the user's original message.
+Write in plain text only — no JSON, no code blocks, no structured format.
+Write natural conversational paragraphs."""
