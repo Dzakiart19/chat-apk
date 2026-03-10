@@ -20,14 +20,19 @@ Implements Manus-like autonomous agent architecture with class-based tools, Plan
 
 ## Key Features
 
+- **Manus-like Web UI**: Full redesign di `server/templates/web-chat.html` dengan Manus-style interface
+  - **Plan Cards**: Plan agent tampil sebagai expandable card dalam chat, real-time update
+  - **Tool Items**: Setiap tool call tampil dengan spinner (calling) → checkmark (called) → X (error)
+  - **Komputer Dzeck Panel**: Panel bawah yang dapat dikembangkan, menampilkan browser screenshot real-time
+  - **Perencana Tab**: Overview semua plan steps dengan status (completed/running/pending)
+  - **Clean Chat**: Hanya respons AI final yang tampil di chat, tool activity tersembunyi rapi di bawah steps
+  - **Browser Screenshot**: Screenshot langsung dari Playwright browser muncul di tool card dan panel bawah
 - **Chat Mode**: Real-time streaming via Cloudflare Workers AI SSE
-- **Agent Mode**: Async autonomous Plan-Act agent with real tool execution
+- **Agent Mode**: Async autonomous Plan-Act agent dengan real tool execution
 - **Class-Based Tools**: BaseTool + @tool decorator pattern (Manus architecture)
 - **Tool Registry**: Centralized registry dengan dynamic schema generation
 - **Session Persistence**: Full MongoDB session history with Redis cache
-- **Browser Automation**: Playwright-powered real browser with live JPEG screenshot capture (base64) streamed to frontend
-- **Komputer Manus View**: ComputerView component shows compact inline card with live screenshot; tap to open full-screen modal with URL bar, screenshot, "Ambil kendali" button, Live indicator, and plan bottom bar
-- **Perencana Plan View**: AgentPlanView shows "Perencana" header with step count (X/Y), expandable steps with result text and tool sub-rows
+- **Browser Automation**: Playwright-powered real browser dengan live screenshot (base64) streamed ke frontend
 - **Expandable Tool Cards**: AgentToolCard shows colored left accent bar, icon, label, expandable inline content (shell/search/browser/file) — no modals
 - **message_notify_user streaming**: Intercepted as streaming message_start/chunk/end events → chat bubbles
 - **Session Resume/Rollback**: Resume interrupted sessions, rollback to any step

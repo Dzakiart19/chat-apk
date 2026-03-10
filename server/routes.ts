@@ -211,7 +211,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     proc.stderr.on("data", (data: Buffer) => {
       const stderr = data.toString();
       console.error("[Agent stderr]:", stderr);
-      if (!doneSent && !res.writableEnded) {
+      // Filter benign connection warnings - don't send as error events to frontend
+      const BENIGN_PATTERNS = [
+        /redis/i,
+        /mongodb/i,
+        /motor/i,
+        /DNS/i,
+        /Name or service not known/i,
+        /ConnectionRefusedError/i,
+        /\[CacheStore\]/i,
+        /\[SessionStore\]/i,
+        /\[SessionService\]/i,
+        /WARNING:/i,
+        /DeprecationWarning/i,
+        /connection failed/i,
+        /Traceback/i, // only show tracebacks in console, not UI
+      ];
+      const isBenign = BENIGN_PATTERNS.some(p => p.test(stderr));
+      if (!isBenign && !doneSent && !res.writableEnded) {
         res.write(`data: ${JSON.stringify({ type: "error", error: stderr })}\n\n`);
       }
     });

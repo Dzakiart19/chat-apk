@@ -1,753 +1,1072 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <title>Dzeck AI Chat</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<html lang="id">
+<head>
+  <title>Dzeck AI</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" type="image/png" href="/assets/images/icon.png"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0A0A0C;
+      --surface:#111116;
+      --surface2:#18181f;
+      --surface3:#1e1e28;
+      --border:#252530;
+      --border2:#2e2e3e;
+      --accent:#6C5CE7;
+      --accent2:#8B7CF8;
+      --accent-glow:rgba(108,92,231,0.18);
+      --text:#E8E8F0;
+      --muted:#6E6E82;
+      --muted2:#9090A8;
+      --user-bubble:#1A1730;
+      --success:#30D158;
+      --error:#FF453A;
+      --warning:#FF9F0A;
+      --blue:#0A84FF;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
 
-      :root {
-        --bg: #0A0A0C;
-        --surface: #141418;
-        --surface2: #1C1C22;
-        --border: #2C2C34;
-        --accent: #6C5CE7;
-        --accent2: #7C6CF7;
-        --text: #E8E8ED;
-        --muted: #8E8E9A;
-        --user-bubble: #1E1B3A;
-        --ai-bubble: #141418;
-      }
+    /* ── Layout ── */
+    #app{display:flex;flex-direction:column;height:100dvh;max-width:900px;margin:0 auto;position:relative}
 
-      html, body {
-        height: 100%;
-        background: var(--bg);
-        color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 15px;
-        line-height: 1.6;
-      }
+    /* ── Header ── */
+    header{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;z-index:10}
+    .logo-wrap{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+    .logo-wrap img{width:32px;height:32px;object-fit:cover;border-radius:9px}
+    .logo-wrap svg{width:16px;height:16px;fill:#fff}
+    .header-info{flex:1}
+    .header-title{font-size:15px;font-weight:600;color:var(--text)}
+    .header-sub{font-size:11px;color:var(--muted)}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0}
 
-      #app {
-        display: flex;
-        flex-direction: column;
-        height: 100dvh;
-        max-width: 860px;
-        margin: 0 auto;
-      }
+    /* ── Chat area ── */
+    #chat-area{flex:1;overflow-y:auto;padding:20px 18px 12px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+    #chat-area::-webkit-scrollbar{width:3px}
+    #chat-area::-webkit-scrollbar-track{background:transparent}
+    #chat-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-      /* Header */
-      header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--border);
-        background: var(--bg);
-        flex-shrink: 0;
-      }
+    /* ── Empty State ── */
+    #empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:14px;color:var(--muted);text-align:center;padding:40px 20px}
+    .empty-logo{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(108,92,231,0.3);overflow:hidden}
+    .empty-logo img{width:64px;height:64px;object-fit:cover;border-radius:20px}
+    .empty-logo svg{width:28px;height:28px;fill:#fff}
+    #empty-state h2{font-size:22px;font-weight:700;color:var(--text)}
+    #empty-state p{font-size:13px;max-width:300px;color:var(--muted2)}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+    .chip{padding:8px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;font-size:12px;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
+    .chip:hover{border-color:var(--accent);background:var(--accent-glow)}
 
-      .header-logo {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-      }
+    /* ── Messages ── */
+    .msg{display:flex;gap:10px;max-width:100%;animation:fadeIn .2s ease}
+    .msg.user{flex-direction:row-reverse}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .avatar{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:600;overflow:hidden}
+    .avatar.ai{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+    .avatar.ai img{width:30px;height:30px;object-fit:cover}
+    .avatar.ai svg{width:14px;height:14px;fill:#fff}
+    .avatar.user{background:var(--surface3);color:var(--muted2)}
+    .bubble{max-width:min(660px,calc(100% - 42px));padding:11px 15px;border-radius:16px;font-size:13.5px;line-height:1.7;word-break:break-word}
+    .msg.user .bubble{background:var(--user-bubble);border:1px solid rgba(108,92,231,.2);border-bottom-right-radius:4px}
+    .msg.ai .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
+    .bubble p{margin-bottom:8px}.bubble p:last-child{margin-bottom:0}
+    .bubble code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px;font-size:12px;font-family:"JetBrains Mono",Menlo,monospace}
+    .bubble pre{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
+    .bubble pre code{background:none;padding:0}
+    .bubble strong{color:#fff}.bubble ul,.bubble ol{padding-left:18px;margin:6px 0}.bubble li{margin:3px 0}
 
-      .header-logo svg { width: 18px; height: 18px; fill: #fff; }
+    /* typing cursor */
+    .cursor{display:inline-block;width:2px;height:14px;background:var(--accent2);margin-left:2px;vertical-align:middle;animation:blink .9s step-end infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-      .header-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text);
-      }
+    /* Typing indicator */
+    .typing-indicator{display:flex;align-items:center;gap:4px;padding:12px 15px}
+    .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:bounce 1.2s ease-in-out infinite}
+    .typing-dot:nth-child(2){animation-delay:.2s}
+    .typing-dot:nth-child(3){animation-delay:.4s}
+    @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
 
-      .header-subtitle {
-        font-size: 12px;
-        color: var(--muted);
-      }
+    /* ── Plan Card ── */
+    .plan-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;width:100%;animation:fadeIn .25s ease}
+    .plan-card-header{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--border);background:var(--surface2)}
+    .plan-icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .plan-icon svg{width:13px;height:13px;fill:#fff}
+    .plan-title-text{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+    .plan-count{font-size:11px;color:var(--muted);padding:3px 8px;background:var(--surface3);border-radius:12px}
+    .plan-steps-list{padding:4px 0}
 
-      .header-info { flex: 1; }
+    /* ── Step Row ── */
+    .step-row{border-bottom:1px solid var(--border)}
+    .step-row:last-child{border-bottom:none}
+    .step-header{display:flex;align-items:center;gap:10px;padding:10px 15px;cursor:pointer;transition:background .12s;user-select:none}
+    .step-header:hover{background:var(--surface2)}
+    .step-status{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .step-status.pending{border:1.5px solid var(--border2)}
+    .step-status.running{border:2px solid var(--warning);animation:pulse-ring 1.4s ease infinite}
+    .step-status.completed{background:var(--success)}
+    .step-status.failed{background:var(--error)}
+    @keyframes pulse-ring{0%,100%{box-shadow:0 0 0 0 rgba(255,159,10,.4)}50%{box-shadow:0 0 0 5px rgba(255,159,10,0)}}
+    .step-status svg{width:10px;height:10px;fill:#fff}
+    .step-status .spin{width:10px;height:10px;border:1.5px solid var(--warning);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .step-name{flex:1;font-size:13px;color:var(--text)}
+    .step-name.muted{color:var(--muted)}
+    .step-toggle{font-size:11px;color:var(--muted);transition:transform .2s}
+    .step-toggle.open{transform:rotate(90deg)}
 
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #30D158;
-        flex-shrink: 0;
-      }
+    /* ── Tool items (under a step) ── */
+    .step-tools{padding:0 15px 8px 44px;display:none;flex-direction:column;gap:4px}
+    .step-tools.open{display:flex}
+    .tool-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:border-color .15s}
+    .tool-item.calling{border-color:rgba(255,159,10,.3)}
+    .tool-item.called{border-color:rgba(48,209,88,.2)}
+    .tool-item.error{border-color:rgba(255,69,58,.3)}
+    .tool-icon-wrap{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+    .tool-icon-wrap.browser{background:rgba(10,132,255,.15)}
+    .tool-icon-wrap.shell{background:rgba(255,159,10,.12)}
+    .tool-icon-wrap.search{background:rgba(48,209,88,.12)}
+    .tool-icon-wrap.file{background:rgba(108,92,231,.15)}
+    .tool-icon-wrap.mcp{background:rgba(255,69,58,.12)}
+    .tool-icon-wrap.message{background:rgba(108,92,231,.15)}
+    .tool-icon-wrap.default{background:var(--surface3)}
+    .tool-label{flex:1;min-width:0}
+    .tool-name{font-size:12px;font-weight:500;color:var(--text)}
+    .tool-desc{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+    .tool-status-icon{flex-shrink:0;font-size:12px}
+    .tool-status-icon .spin{width:12px;height:12px;border:1.5px solid var(--warning);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
 
-      .mobile-link {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 7px 14px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--accent2);
-        background: rgba(108, 92, 231, 0.12);
-        border: 1px solid rgba(108, 92, 231, 0.25);
-        border-radius: 8px;
-        text-decoration: none;
-        transition: background 0.15s;
-      }
+    /* expandable tool result */
+    .tool-result-area{display:none;padding:6px 0 0 0}
+    .tool-result-text{font-size:11px;color:var(--muted2);background:rgba(0,0,0,.3);border-radius:6px;padding:6px 8px;max-height:100px;overflow-y:auto;font-family:monospace;white-space:pre-wrap;word-break:break-all}
+    .tool-screenshot{width:100%;border-radius:6px;margin-top:4px;border:1px solid var(--border);max-height:200px;object-fit:contain;cursor:pointer}
 
-      .mobile-link:hover { background: rgba(108, 92, 231, 0.2); }
-      .mobile-link svg { width: 14px; height: 14px; fill: currentColor; }
+    /* ── Computer Panel (fixed bottom) ── */
+    #computer-panel{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:900px;background:var(--surface);border:1px solid var(--border2);border-bottom:none;border-radius:16px 16px 0 0;z-index:50;box-shadow:0 -4px 32px rgba(0,0,0,.6);transition:all .3s ease;display:none}
+    #computer-panel.visible{display:block}
+    #computer-panel.collapsed .computer-body{display:none}
+    #computer-panel.fullscreen{position:fixed;inset:0;max-width:100%;border-radius:0;border:none;z-index:200;transform:none;left:0}
+    #computer-panel.fullscreen .computer-body{height:calc(100vh - 48px);overflow:auto}
+    #computer-panel.fullscreen #browser-screen{max-height:calc(100vh - 160px)}
+    #computer-handle{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
+    .computer-drag-bar{width:32px;height:3px;background:var(--border2);border-radius:3px;flex-shrink:0}
+    .computer-handle-info{flex:1;min-width:0}
+    .computer-handle-title{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+    .computer-handle-title .live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:livePulse 1.5s ease infinite}
+    @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .computer-handle-task{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+    .computer-chevron{font-size:12px;color:var(--muted);transition:transform .25s}
+    #computer-panel.collapsed .computer-chevron{transform:rotate(180deg)}
+    .computer-handle-actions{display:flex;align-items:center;gap:8px}
+    .computer-action-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:background .15s,color .15s;flex-shrink:0}
+    .computer-action-btn:hover{background:var(--surface3);color:var(--text)}
+    .computer-body{padding:0}
+    .computer-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 16px;gap:0}
+    .ctab{padding:8px 14px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+    .ctab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+    .ctab-content{display:none;padding:12px 16px}
+    .ctab-content.active{display:block}
 
-      /* Messages */
-      #messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 24px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        scroll-behavior: smooth;
-      }
+    /* Browser tab */
+    #browser-urlbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
+    #browser-urlbar svg{width:12px;height:12px;fill:var(--muted);flex-shrink:0}
+    #browser-url-text{font-size:11px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #browser-screen{width:100%;border-radius:8px;border:1px solid var(--border);display:block;max-height:220px;object-fit:contain;background:var(--surface2)}
+    #browser-empty-msg{text-align:center;padding:30px;color:var(--muted);font-size:12px}
 
-      #messages::-webkit-scrollbar { width: 4px; }
-      #messages::-webkit-scrollbar-track { background: transparent; }
-      #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    /* Plan tab */
+    .perencana-header{font-size:12px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .plan-step-overview{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .plan-step-overview:last-child{border-bottom:none}
+    .plan-step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;border:1.5px solid var(--border2);color:var(--muted)}
+    .plan-step-num.done{background:var(--success);border-color:var(--success);color:#fff}
+    .plan-step-num.running{border-color:var(--warning);color:var(--warning)}
+    .plan-step-num.failed{background:var(--error);border-color:var(--error);color:#fff}
+    .plan-step-desc{flex:1;font-size:12px;color:var(--text);line-height:1.4}
+    .plan-step-desc.done{color:var(--muted)}
+    .plan-step-arrow{font-size:10px;color:var(--muted)}
 
-      .message { display: flex; gap: 10px; max-width: 100%; }
-      .message.user { flex-direction: row-reverse; }
+    /* ── Input area ── */
+    #input-area{padding:10px 18px 18px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0}
+    #input-area.with-panel{padding-bottom:64px}
+    .input-box{display:flex;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:10px 10px 10px 14px;transition:border-color .15s}
+    .input-box:focus-within{border-color:var(--accent)}
+    #user-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13.5px;line-height:1.5;resize:none;max-height:140px;min-height:22px;font-family:inherit;scrollbar-width:none}
+    #user-input::placeholder{color:var(--muted)}
+    #user-input::-webkit-scrollbar{display:none}
+    #send-btn,#stop-btn{width:34px;height:34px;border-radius:9px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s}
+    #send-btn{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+    #send-btn:hover{opacity:.9;transform:scale(1.04)}
+    #send-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+    #send-btn svg,#stop-btn svg{width:15px;height:15px;fill:#fff}
+    #stop-btn{background:var(--surface2);border:1px solid var(--border)}
+    #stop-btn:hover{background:var(--surface3)}
+    .input-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;opacity:.5}
 
-      .avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        font-size: 14px;
-        font-weight: 600;
-      }
+    /* ── Error toast ── */
+    #error-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#2A0808;border:1px solid #5A1515;color:#FF7070;padding:9px 16px;border-radius:9px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
+    #error-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-      .avatar.ai {
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-      }
+    /* ── Fullscreen screenshot modal ── */
+    #screenshot-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+    #screenshot-modal.open{display:flex}
+    #screenshot-modal img{max-width:95vw;max-height:90vh;border-radius:10px;border:1px solid var(--border)}
 
-      .avatar.ai svg { width: 16px; height: 16px; fill: #fff; }
+    @media(max-width:520px){
+      header{padding:10px 14px}
+      #chat-area{padding:14px 12px 10px}
+      #input-area{padding:8px 12px 14px}
+      .tool-desc{max-width:160px}
+    }
+  </style>
+</head>
+<body>
 
-      .avatar.user {
-        background: var(--surface2);
-        color: var(--muted);
-        font-size: 13px;
-      }
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="logo-wrap">
+      <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div class="header-info">
+      <div class="header-title">Dzeck AI</div>
+      <div class="header-sub" id="header-sub">Agent Mode · Streaming</div>
+    </div>
+    <div class="status-dot" id="status-dot" title="Online"></div>
+  </header>
 
-      .bubble {
-        max-width: min(600px, calc(100% - 42px));
-        padding: 12px 16px;
-        border-radius: 16px;
-        font-size: 14px;
-        line-height: 1.65;
-        word-break: break-word;
-      }
-
-      .message.user .bubble {
-        background: var(--user-bubble);
-        border: 1px solid rgba(108, 92, 231, 0.2);
-        border-bottom-right-radius: 4px;
-      }
-
-      .message.ai .bubble {
-        background: var(--ai-bubble);
-        border: 1px solid var(--border);
-        border-bottom-left-radius: 4px;
-      }
-
-      .bubble p { margin-bottom: 8px; }
-      .bubble p:last-child { margin-bottom: 0; }
-      .bubble code {
-        background: rgba(255,255,255,0.07);
-        padding: 1px 5px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
-      }
-      .bubble pre {
-        background: rgba(0,0,0,0.35);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px;
-        overflow-x: auto;
-        margin: 8px 0;
-      }
-      .bubble pre code { background: none; padding: 0; }
-      .bubble strong { color: #fff; }
-      .bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
-      .bubble li { margin: 3px 0; }
-
-      .typing-indicator {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 14px 16px;
-      }
-
-      .typing-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--muted);
-        animation: typingBounce 1.2s ease-in-out infinite;
-      }
-
-      .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-      .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-      @keyframes typingBounce {
-        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-        30% { transform: translateY(-4px); opacity: 1; }
-      }
-
-      .cursor {
-        display: inline-block;
-        width: 2px;
-        height: 16px;
-        background: var(--accent2);
-        margin-left: 2px;
-        vertical-align: middle;
-        animation: blink 0.9s step-end infinite;
-      }
-
-      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-      /* Tool/step events */
-      .step-event {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--muted);
-        padding: 4px 0;
-      }
-
-      .step-event svg { width: 12px; height: 12px; fill: var(--accent2); flex-shrink: 0; }
-
-      /* Empty state */
-      #empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        flex: 1;
-        gap: 12px;
-        color: var(--muted);
-        text-align: center;
-        padding: 40px 20px;
-      }
-
-      #empty-state .big-logo {
-        width: 64px;
-        height: 64px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 8px 32px rgba(108, 92, 231, 0.25);
-        margin-bottom: 4px;
-      }
-
-      #empty-state .big-logo svg { width: 32px; height: 32px; fill: #fff; }
-      #empty-state h2 { font-size: 20px; font-weight: 700; color: var(--text); }
-      #empty-state p { font-size: 14px; max-width: 320px; }
-
-      .suggestions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: center;
-        margin-top: 8px;
-      }
-
-      .suggestion-chip {
-        padding: 8px 16px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        font-size: 13px;
-        color: var(--text);
-        cursor: pointer;
-        transition: border-color 0.15s, background 0.15s;
-      }
-
-      .suggestion-chip:hover {
-        border-color: var(--accent);
-        background: rgba(108, 92, 231, 0.08);
-      }
-
-      /* Input area */
-      #input-area {
-        padding: 12px 20px 20px;
-        border-top: 1px solid var(--border);
-        background: var(--bg);
-        flex-shrink: 0;
-      }
-
-      .input-box {
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 10px 10px 10px 16px;
-        transition: border-color 0.15s;
-      }
-
-      .input-box:focus-within { border-color: var(--accent); }
-
-      #user-input {
-        flex: 1;
-        background: none;
-        border: none;
-        outline: none;
-        color: var(--text);
-        font-size: 14px;
-        line-height: 1.5;
-        resize: none;
-        max-height: 160px;
-        min-height: 24px;
-        font-family: inherit;
-        scrollbar-width: none;
-      }
-
-      #user-input::placeholder { color: var(--muted); }
-      #user-input::-webkit-scrollbar { display: none; }
-
-      #send-btn {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-        border: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: opacity 0.15s, transform 0.1s;
-      }
-
-      #send-btn:hover { opacity: 0.9; transform: scale(1.04); }
-      #send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-      #send-btn svg { width: 16px; height: 16px; fill: #fff; }
-
-      #stop-btn {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: background 0.15s;
-      }
-
-      #stop-btn:hover { background: #2C2C34; }
-      #stop-btn svg { width: 14px; height: 14px; fill: var(--muted); }
-
-      .input-hint {
-        font-size: 11px;
-        color: var(--muted);
-        text-align: center;
-        margin-top: 8px;
-        opacity: 0.6;
-      }
-
-      /* Error toast */
-      #error-toast {
-        position: fixed;
-        bottom: 80px;
-        left: 50%;
-        transform: translateX(-50%) translateY(20px);
-        background: #3A1010;
-        border: 1px solid #7A2020;
-        color: #FF6B6B;
-        padding: 10px 18px;
-        border-radius: 10px;
-        font-size: 13px;
-        opacity: 0;
-        transition: opacity 0.2s, transform 0.2s;
-        pointer-events: none;
-        white-space: nowrap;
-        z-index: 100;
-      }
-
-      #error-toast.show {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
-
-      @media (max-width: 480px) {
-        header { padding: 12px 16px; }
-        #messages { padding: 16px; gap: 16px; }
-        #input-area { padding: 10px 16px 16px; }
-        .mobile-link span { display: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <header>
-        <div class="header-logo">
-          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
-        </div>
-        <div class="header-info">
-          <div class="header-title">Dzeck AI</div>
-          <div class="header-subtitle">Mistral Agent &bull; Streaming</div>
-        </div>
-        <div class="status-dot" title="Online"></div>
-        <a href="/mobile" class="mobile-link">
-          <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
-          <span>Mobile</span>
-        </a>
-      </header>
-
-      <div id="messages">
-        <div id="empty-state">
-          <div class="big-logo">
-            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <h2>Dzeck AI</h2>
-          <p>AI Agent powered by Mistral with tools and memory. Ask anything.</p>
-          <div class="suggestions">
-            <div class="suggestion-chip" onclick="sendSuggestion(this)">What can you do?</div>
-            <div class="suggestion-chip" onclick="sendSuggestion(this)">Explain quantum computing</div>
-            <div class="suggestion-chip" onclick="sendSuggestion(this)">Write a Python script</div>
-            <div class="suggestion-chip" onclick="sendSuggestion(this)">Summarize the news today</div>
-          </div>
-        </div>
+  <!-- Chat -->
+  <div id="chat-area">
+    <div id="empty-state">
+      <div class="empty-logo">
+        <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
-
-      <div id="input-area">
-        <div class="input-box">
-          <textarea
-            id="user-input"
-            placeholder="Message Dzeck AI..."
-            rows="1"
-            autocomplete="off"
-            spellcheck="true"
-          ></textarea>
-          <button id="send-btn" onclick="sendMessage()" title="Send">
-            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-          </button>
-          <button id="stop-btn" style="display:none" onclick="stopGeneration()" title="Stop">
-            <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          </button>
-        </div>
-        <div class="input-hint">Enter to send &bull; Shift+Enter for new line</div>
+      <h2>Dzeck AI</h2>
+      <p>AI Agent otonom dengan browser, terminal, dan memori. Tanyakan apa saja.</p>
+      <div class="chips">
+        <div class="chip" onclick="sendSuggestion(this)">Apa yang bisa kamu lakukan?</div>
+        <div class="chip" onclick="sendSuggestion(this)">Cari berita terbaru hari ini</div>
+        <div class="chip" onclick="sendSuggestion(this)">Buat script Python sederhana</div>
+        <div class="chip" onclick="sendSuggestion(this)">Jelaskan cara kerja AI</div>
       </div>
     </div>
+  </div>
 
-    <div id="error-toast"></div>
+  <!-- Computer Panel (bottom drawer) -->
+  <div id="computer-panel">
+    <div id="computer-handle" onclick="toggleComputer()">
+      <div class="computer-drag-bar"></div>
+      <div class="computer-handle-info">
+        <div class="computer-handle-title">
+          <span class="live-dot"></span>
+          Komputer Dzeck
+        </div>
+        <div class="computer-handle-task" id="computer-task-text">Agent sedang bekerja...</div>
+      </div>
+      <div class="computer-handle-actions" onclick="event.stopPropagation()">
+        <button class="computer-action-btn" id="fullscreen-btn" onclick="toggleComputerFullscreen()" title="Layar Penuh">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+        <button class="computer-action-btn" id="panel-close-btn" onclick="hideComputer()" title="Tutup">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <span class="computer-chevron" id="computer-chevron">▲</span>
+    </div>
+    <div class="computer-body">
+      <div class="computer-tabs">
+        <div class="ctab active" onclick="switchTab('browser',this)" id="tab-btn-browser">Browser</div>
+        <div class="ctab" onclick="switchTab('plan',this)" id="tab-btn-plan">Perencana</div>
+      </div>
+      <div class="ctab-content active" id="ctab-browser">
+        <div id="browser-urlbar">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12" stroke="#6E6E82" stroke-width="2"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="#6E6E82" stroke-width="1.5" fill="none"/></svg>
+          <div id="browser-url-text">-</div>
+        </div>
+        <img id="browser-screen" src="" alt="Browser screenshot" style="display:none" onclick="openScreenshot(this.src)"/>
+        <div id="browser-empty-msg">Tidak ada aktivitas browser</div>
+      </div>
+      <div class="ctab-content" id="ctab-plan">
+        <div class="perencana-header">Perencana</div>
+        <div id="plan-overview-list"></div>
+      </div>
+    </div>
+  </div>
 
-    <script>
-      const messagesEl = document.getElementById('messages');
-      const inputEl = document.getElementById('user-input');
-      const sendBtn = document.getElementById('send-btn');
-      const stopBtn = document.getElementById('stop-btn');
-      const emptyState = document.getElementById('empty-state');
+  <!-- Input area -->
+  <div id="input-area">
+    <div class="input-box">
+      <textarea id="user-input" placeholder="Kirim pesan ke Dzeck AI..." rows="1" autocomplete="off" spellcheck="true"></textarea>
+      <button id="send-btn" onclick="sendMessage()" title="Kirim">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+      <button id="stop-btn" style="display:none" onclick="stopGeneration()" title="Stop">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+    </div>
+    <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru</div>
+  </div>
+</div>
 
-      let messageHistory = [];
-      let sessionId = null;
-      let currentEventSource = null;
-      let isStreaming = false;
-      let currentAiBubble = null;
-      let currentAiContent = '';
+<!-- Error toast -->
+<div id="error-toast"></div>
 
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.appendChild(document.createTextNode(text));
-        return div.innerHTML;
-      }
+<!-- Screenshot fullscreen modal -->
+<div id="screenshot-modal" onclick="closeScreenshot()">
+  <img id="screenshot-modal-img" src="" alt="Screenshot"/>
+</div>
 
-      function renderMarkdown(text) {
-        let html = escapeHtml(text);
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-          `<pre><code>${code}</code></pre>`
-        );
-        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        html = html.replace(/^### (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/^## (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/^# (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-        html = html.replace(/\n\n+/g, '</p><p>');
-        html = html.replace(/\n/g, '<br>');
-        html = '<p>' + html + '</p>';
-        html = html.replace(/<p><\/p>/g, '');
-        return html;
-      }
+<script>
+// ═══════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════
+const S = {
+  sessionId: null,
+  isStreaming: false,
+  abortController: null,
+  plan: null,
+  planCardEl: null,
+  currentStepId: null,
+  stepEls: {},        // stepId → { headerEl, toolsEl, statusEl, toggleEl }
+  toolEls: {},        // toolCallId → { itemEl, statusEl, resultEl }
+  toolsByStep: {},    // stepId → [toolCallId, ...]
+  aiMsgEl: null,
+  aiContent: '',
+  computerVisible: false,
+  computerCollapsed: false,
+  computerFullscreen: false,
+  currentTab: 'browser',
+  latestScreenshot: null,
+  latestBrowserUrl: '',
+};
 
-      function appendUserMessage(text) {
-        if (emptyState) emptyState.remove();
+// ─── Elements ───────────────────────────────────────────────
+const chatEl   = document.getElementById('chat-area');
+const inputEl  = document.getElementById('user-input');
+const sendBtn  = document.getElementById('send-btn');
+const stopBtn  = document.getElementById('stop-btn');
+const emptyEl  = document.getElementById('empty-state');
+const computerPanel = document.getElementById('computer-panel');
+const computerTaskText = document.getElementById('computer-task-text');
+const browserScreen = document.getElementById('browser-screen');
+const browserUrlText = document.getElementById('browser-url-text');
+const browserEmptyMsg = document.getElementById('browser-empty-msg');
+const planOverviewList = document.getElementById('plan-overview-list');
+const inputArea = document.getElementById('input-area');
 
-        const div = document.createElement('div');
-        div.className = 'message user';
-        div.innerHTML = `
-          <div class="avatar user">Me</div>
-          <div class="bubble">${renderMarkdown(text)}</div>
-        `;
-        messagesEl.appendChild(div);
-        scrollToBottom();
-      }
+// ═══════════════════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════════════════
+function esc(text) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(text));
+  return d.innerHTML;
+}
 
-      function createAiMessageEl() {
-        if (emptyState) emptyState.remove();
+function renderMarkdown(text) {
+  let h = esc(text);
+  h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_,l,c)=>`<pre><code>${c}</code></pre>`);
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  h = h.replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>');
+  h = h.replace(/^\- (.+)$/gm, '<li>$1</li>');
+  h = h.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+  h = h.replace(/\n\n+/g, '</p><p>');
+  h = h.replace(/\n/g, '<br>');
+  return '<p>' + h + '</p>';
+}
 
-        const div = document.createElement('div');
-        div.className = 'message ai';
-        div.innerHTML = `
-          <div class="avatar ai">
-            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div class="bubble" id="ai-bubble-current">
-            <div class="typing-indicator">
-              <div class="typing-dot"></div>
-              <div class="typing-dot"></div>
-              <div class="typing-dot"></div>
-            </div>
-          </div>
-        `;
-        messagesEl.appendChild(div);
-        scrollToBottom();
-        return div.querySelector('#ai-bubble-current');
-      }
+function scrollBottom() {
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
+}
 
-      function appendStepEvent(text) {
-        const div = document.createElement('div');
-        div.className = 'step-event';
-        div.innerHTML = `
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg>
-          <span>${escapeHtml(text)}</span>
-        `;
-        messagesEl.appendChild(div);
-        scrollToBottom();
-      }
+function showError(msg) {
+  const t = document.getElementById('error-toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4500);
+}
 
-      function scrollToBottom() {
-        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
-      }
+function setStreaming(v) {
+  S.isStreaming = v;
+  sendBtn.style.display = v ? 'none' : 'flex';
+  stopBtn.style.display = v ? 'flex' : 'none';
+  inputEl.disabled = v;
+  document.getElementById('status-dot').style.background = v ? 'var(--warning)' : 'var(--success)';
+  if (!v) { inputEl.focus(); inputArea.classList.remove('with-panel'); }
+}
 
-      function showError(msg) {
-        const toast = document.getElementById('error-toast');
-        toast.textContent = msg;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 4000);
-      }
+// ═══════════════════════════════════════════════════════════
+// Chat message builders
+// ═══════════════════════════════════════════════════════════
+function removeEmpty() {
+  if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+}
 
-      function setStreaming(streaming) {
-        isStreaming = streaming;
-        sendBtn.style.display = streaming ? 'none' : 'flex';
-        stopBtn.style.display = streaming ? 'flex' : 'none';
-        inputEl.disabled = streaming;
-        if (!streaming) inputEl.focus();
-      }
+function appendUserMsg(text) {
+  removeEmpty();
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `
+    <div class="avatar user">Me</div>
+    <div class="bubble">${renderMarkdown(text)}</div>
+  `;
+  chatEl.appendChild(el);
+  scrollBottom();
+}
 
-      function stopGeneration() {
-        if (currentEventSource) {
-          currentEventSource.close();
-          currentEventSource = null;
-        }
-        if (currentAiBubble && currentAiContent) {
-          currentAiBubble.innerHTML = renderMarkdown(currentAiContent);
-        } else if (currentAiBubble) {
-          currentAiBubble.innerHTML = '<em style="color:var(--muted)">Stopped.</em>';
-        }
-        currentAiBubble = null;
-        currentAiContent = '';
-        setStreaming(false);
-      }
+function createAiMsgEl() {
+  removeEmpty();
+  const el = document.createElement('div');
+  el.className = 'msg ai';
+  el.innerHTML = `
+    <div class="avatar ai">
+      <img src="/assets/images/icon.png" alt="AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div class="bubble" id="ai-bubble-active">
+      <div class="typing-indicator">
+        <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+      </div>
+    </div>
+  `;
+  chatEl.appendChild(el);
+  scrollBottom();
+  return el.querySelector('#ai-bubble-active');
+}
 
-      async function sendMessage() {
-        const text = inputEl.value.trim();
-        if (!text || isStreaming) return;
+// ═══════════════════════════════════════════════════════════
+// Plan Card
+// ═══════════════════════════════════════════════════════════
+function createPlanCard(plan) {
+  removeEmpty();
+  const card = document.createElement('div');
+  card.className = 'plan-card';
+  card.id = 'plan-card-main';
 
-        inputEl.value = '';
-        inputEl.style.height = 'auto';
+  const steps = plan.steps || [];
+  const stepsHtml = steps.map(st => buildStepRow(st)).join('');
 
-        appendUserMessage(text);
-        messageHistory.push({ role: 'user', content: text });
+  card.innerHTML = `
+    <div class="plan-card-header">
+      <div class="plan-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <div class="plan-title-text" id="plan-title-text">${esc(plan.title || 'Rencana Eksekusi')}</div>
+      <div class="plan-count" id="plan-count">0/${steps.length}</div>
+    </div>
+    <div class="plan-steps-list" id="plan-steps-list">
+      ${stepsHtml}
+    </div>
+  `;
+  chatEl.appendChild(card);
+  scrollBottom();
+  S.planCardEl = card;
 
-        setStreaming(true);
-        currentAiBubble = createAiMessageEl();
-        currentAiContent = '';
+  // Register step elements
+  steps.forEach(st => {
+    S.stepEls[st.id] = {
+      headerEl: card.querySelector(`#step-h-${st.id}`),
+      toolsEl:  card.querySelector(`#step-tools-${st.id}`),
+      statusEl: card.querySelector(`#step-status-${st.id}`),
+      toggleEl: card.querySelector(`#step-toggle-${st.id}`),
+    };
+    S.toolsByStep[st.id] = [];
+  });
+  return card;
+}
 
-        try {
-          const response = await fetch('/api/agent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: text,
-              messages: messageHistory.slice(0, -1),
-              session_id: sessionId,
-            }),
-          });
+function buildStepRow(st) {
+  const statusHtml = getStepStatusHtml(st.status || 'pending');
+  return `
+    <div class="step-row" id="step-row-${st.id}">
+      <div class="step-header" id="step-h-${st.id}" onclick="toggleStep('${st.id}')">
+        <div class="step-status" id="step-status-${st.id}">${statusHtml}</div>
+        <div class="step-name" id="step-name-${st.id}">${esc(st.description || 'Step')}</div>
+        <div class="step-toggle" id="step-toggle-${st.id}">›</div>
+      </div>
+      <div class="step-tools" id="step-tools-${st.id}"></div>
+    </div>
+  `;
+}
 
-          if (!response.ok) {
-            throw new Error(`Server error ${response.status}`);
-          }
+function getStepStatusHtml(status) {
+  if (status === 'completed') return `<svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:#fff;stroke-width:3"><polyline points="20 6 9 17 4 12"/></svg>`;
+  if (status === 'running') return `<div class="spin"></div>`;
+  if (status === 'failed') return `<svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:#fff;stroke-width:3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  return ''; // pending = empty circle
+}
 
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let sseBuffer = '';
+function updateStepStatus(stepId, status) {
+  const els = S.stepEls[stepId];
+  if (!els || !els.statusEl) return;
 
-          const processSSE = async () => {
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
+  const sc = els.statusEl;
+  sc.className = `step-status ${status}`;
+  sc.innerHTML = getStepStatusHtml(status);
 
-              sseBuffer += decoder.decode(value, { stream: true });
-              const lines = sseBuffer.split('\n');
-              sseBuffer = lines.pop();
+  const nameEl = document.getElementById(`step-name-${stepId}`);
+  if (nameEl) nameEl.className = status === 'completed' ? 'step-name muted' : 'step-name';
 
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const data = line.slice(6).trim();
-                if (data === '[DONE]') {
-                  finalizeAiMessage();
-                  return;
-                }
-                try {
-                  const evt = JSON.parse(data);
-                  handleSSEEvent(evt);
-                } catch {}
-              }
-            }
-            finalizeAiMessage();
-          };
+  // Update plan count
+  updatePlanCount();
+}
 
-          await processSSE();
+function updatePlanCount() {
+  if (!S.plan) return;
+  const done = S.plan.steps.filter(s => s.status === 'completed' || s.status === 'failed').length;
+  const total = S.plan.steps.length;
+  const el = document.getElementById('plan-count');
+  if (el) el.textContent = `${done}/${total}`;
+}
 
-        } catch (err) {
-          console.error('Stream error:', err);
-          if (currentAiBubble) {
-            currentAiBubble.innerHTML = '<em style="color:#FF6B6B">Error connecting to AI. Please try again.</em>';
-          }
-          showError('Failed to get response. Check your connection.');
-          setStreaming(false);
-          currentAiBubble = null;
-          currentAiContent = '';
-        }
-      }
+function toggleStep(stepId) {
+  const els = S.stepEls[stepId];
+  if (!els) return;
+  const toolsEl = els.toolsEl || document.getElementById(`step-tools-${stepId}`);
+  const toggleEl = els.toggleEl || document.getElementById(`step-toggle-${stepId}`);
+  if (toolsEl) toolsEl.classList.toggle('open');
+  if (toggleEl) toggleEl.classList.toggle('open');
+}
 
-      function handleSSEEvent(evt) {
-        if (!evt || !evt.type) return;
+function openStep(stepId) {
+  const toolsEl = document.getElementById(`step-tools-${stepId}`);
+  const toggleEl = document.getElementById(`step-toggle-${stepId}`);
+  if (toolsEl) toolsEl.classList.add('open');
+  if (toggleEl) toggleEl.classList.add('open');
+}
 
-        if (evt.type === 'session') {
-          sessionId = evt.session_id;
-          return;
-        }
+// ═══════════════════════════════════════════════════════════
+// Tool items
+// ═══════════════════════════════════════════════════════════
+const TOOL_META = {
+  browser:  { label: 'Browser',   icon: '🌐', cls: 'browser' },
+  shell:    { label: 'Terminal',  icon: '⌨️', cls: 'shell' },
+  search:   { label: 'Pencarian', icon: '🔍', cls: 'search' },
+  file:     { label: 'File',      icon: '📄', cls: 'file' },
+  mcp:      { label: 'MCP',       icon: '🔧', cls: 'mcp' },
+  message:  { label: 'Pesan',     icon: '💬', cls: 'message' },
+};
 
-        // Agent streaming: message_chunk is the primary token event
-        if (evt.type === 'message_chunk') {
-          const token = evt.chunk || '';
-          if (token && currentAiBubble) {
-            currentAiContent += token;
-            currentAiBubble.innerHTML = renderMarkdown(currentAiContent) + '<span class="cursor"></span>';
-            scrollToBottom();
-          }
-          return;
-        }
+function getToolMeta(toolName) {
+  const n = (toolName || '').toLowerCase();
+  if (n.includes('browser') || n.includes('web_browse') || n.includes('navigate')) return TOOL_META.browser;
+  if (n.includes('shell') || n.includes('terminal')) return TOOL_META.shell;
+  if (n.includes('search') || n.includes('info_search')) return TOOL_META.search;
+  if (n.includes('file') || n.includes('image_view')) return TOOL_META.file;
+  if (n.includes('mcp')) return TOOL_META.mcp;
+  if (n.includes('message') || n.includes('notify')) return TOOL_META.message;
+  return { label: toolName || 'Tool', icon: '⚙️', cls: 'default' };
+}
 
-        if (evt.type === 'message_start') {
-          return;
-        }
+function getToolDescription(fnName, fnArgs) {
+  if (!fnArgs) return fnName || '';
+  const url = fnArgs.url || fnArgs.query || fnArgs.command || fnArgs.path || fnArgs.file || fnArgs.text || '';
+  if (url) return String(url).substring(0, 60);
+  return fnName || '';
+}
 
-        if (evt.type === 'message_end') {
-          return;
-        }
+function addToolItem(stepId, toolCallId, evt) {
+  const toolsEl = document.getElementById(`step-tools-${stepId}`);
+  if (!toolsEl) return;
 
-        // Step / tool events
-        if (evt.type === 'step') {
-          const step = evt.step || {};
-          const status = evt.status || '';
-          const name = step.name || step.tool || step.action || '';
-          const desc = step.description || step.result || '';
-          if (name && status !== 'completed') {
-            appendStepEvent(name + (desc ? ': ' + desc.slice(0, 80) : ''));
-          }
-          return;
-        }
+  const meta = getToolMeta(evt.function_name || evt.tool_name || '');
+  const desc = getToolDescription(evt.function_name, evt.function_args);
+  const statusHtml = `<div class="spin" id="tool-spin-${toolCallId}"></div>`;
 
-        if (evt.type === 'plan') {
-          const plan = evt.plan || {};
-          const planStatus = evt.status || '';
-          if (planStatus === 'creating' || planStatus === 'created') {
-            if (plan.title) appendStepEvent('Plan: ' + plan.title);
-          }
-          return;
-        }
+  const item = document.createElement('div');
+  item.className = 'tool-item calling';
+  item.id = `tool-item-${toolCallId}`;
+  item.innerHTML = `
+    <div class="tool-icon-wrap ${meta.cls}">${meta.icon}</div>
+    <div class="tool-label">
+      <div class="tool-name">${esc(meta.label)}</div>
+      <div class="tool-desc" id="tool-desc-${toolCallId}">${esc(desc)}</div>
+    </div>
+    <div class="tool-status-icon" id="tool-si-${toolCallId}">${statusHtml}</div>
+    <div class="tool-result-area" id="tool-result-${toolCallId}"></div>
+  `;
+  toolsEl.appendChild(item);
+  scrollBottom();
+  S.toolEls[toolCallId] = item;
+}
 
-        if (evt.type === 'title') {
-          return;
-        }
+function updateToolItem(toolCallId, evt) {
+  const item = S.toolEls[toolCallId] || document.getElementById(`tool-item-${toolCallId}`);
+  if (!item) return;
 
-        if (evt.type === 'done') {
-          return;
-        }
+  const ok = evt.status === 'called';
+  const err = evt.status === 'error';
+  item.className = `tool-item ${ok ? 'called' : 'error'}`;
 
-        if (evt.type === 'error') {
-          showError(evt.error || 'AI error occurred');
-          return;
-        }
+  const siEl = document.getElementById(`tool-si-${toolCallId}`);
+  if (siEl) {
+    if (ok) siEl.innerHTML = '<span style="color:var(--success);font-size:14px">✓</span>';
+    else if (err) siEl.innerHTML = '<span style="color:var(--error);font-size:14px">✕</span>';
+  }
 
-        // Fallback for generic content events
-        const content = evt.content || evt.response || evt.text || evt.message || evt.chunk || '';
-        if (content && currentAiBubble) {
-          currentAiContent += content;
-          currentAiBubble.innerHTML = renderMarkdown(currentAiContent) + '<span class="cursor"></span>';
-          scrollToBottom();
-        }
-      }
+  // Show result text if available
+  const resultEl = document.getElementById(`tool-result-${toolCallId}`);
+  if (resultEl && evt.function_result) {
+    const shortResult = String(evt.function_result).substring(0, 300);
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div class="tool-result-text">${esc(shortResult)}</div>`;
+  }
 
-      function finalizeAiMessage() {
-        if (currentAiBubble) {
-          if (currentAiContent) {
-            currentAiBubble.innerHTML = renderMarkdown(currentAiContent);
-            messageHistory.push({ role: 'assistant', content: currentAiContent });
+  // Handle browser tool_content with screenshot
+  const tc = evt.tool_content;
+  if (tc) {
+    if (tc.type === 'browser') {
+      if (tc.screenshot_b64) {
+        updateBrowserScreenshot(tc.screenshot_b64, tc.url || '', tc.title || '');
+        // also show screenshot in the tool item
+        if (resultEl) {
+          resultEl.style.display = 'block';
+          const imgSrc = `data:image/png;base64,${tc.screenshot_b64}`;
+          const existImg = resultEl.querySelector('.tool-screenshot');
+          if (!existImg) {
+            const img = document.createElement('img');
+            img.className = 'tool-screenshot';
+            img.src = imgSrc;
+            img.onclick = (e) => { e.stopPropagation(); openScreenshot(imgSrc); };
+            resultEl.appendChild(img);
           } else {
-            currentAiBubble.innerHTML = '<em style="color:var(--muted)">No response received.</em>';
+            existImg.src = imgSrc;
           }
         }
-        currentAiBubble = null;
-        currentAiContent = '';
-        setStreaming(false);
       }
-
-      function sendSuggestion(el) {
-        inputEl.value = el.textContent;
-        sendMessage();
+      if (tc.url) {
+        const descEl = document.getElementById(`tool-desc-${toolCallId}`);
+        if (descEl) descEl.textContent = tc.url.substring(0, 60);
+        updateBrowserUrl(tc.url);
       }
+    } else if (tc.type === 'shell' && tc.console) {
+      if (resultEl) {
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = `<div class="tool-result-text">${esc(tc.console.substring(0, 500))}</div>`;
+      }
+    } else if (tc.type === 'search' && tc.results && tc.results.length) {
+      if (resultEl) {
+        const summary = tc.results.slice(0, 3).map(r => `• ${r.title || r.url || ''}`).join('\n');
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = `<div class="tool-result-text">${esc(summary)}</div>`;
+      }
+    }
+  }
+  scrollBottom();
+}
 
-      inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
+// ═══════════════════════════════════════════════════════════
+// Computer Panel
+// ═══════════════════════════════════════════════════════════
+function showComputer() {
+  computerPanel.classList.add('visible');
+  S.computerVisible = true;
+  inputArea.classList.add('with-panel');
+}
+
+function hideComputer() {
+  computerPanel.classList.remove('visible','fullscreen');
+  S.computerVisible = false;
+  S.computerFullscreen = false;
+  inputArea.classList.remove('with-panel');
+  _updateFullscreenBtn();
+}
+
+function toggleComputer() {
+  if (computerPanel.classList.contains('fullscreen')) return; // don't collapse when fullscreen
+  computerPanel.classList.toggle('collapsed');
+  S.computerCollapsed = computerPanel.classList.contains('collapsed');
+}
+
+function toggleComputerFullscreen() {
+  const isFs = computerPanel.classList.toggle('fullscreen');
+  S.computerFullscreen = isFs;
+  if (isFs) {
+    computerPanel.classList.remove('collapsed');
+    S.computerCollapsed = false;
+    inputArea.classList.remove('with-panel');
+  } else {
+    inputArea.classList.add('with-panel');
+  }
+  _updateFullscreenBtn();
+}
+
+function _updateFullscreenBtn() {
+  const btn = document.getElementById('fullscreen-btn');
+  if (!btn) return;
+  if (S.computerFullscreen) {
+    btn.title = 'Keluar Layar Penuh';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>';
+  } else {
+    btn.title = 'Layar Penuh';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+  }
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.ctab-content').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById(`ctab-${name}`).classList.add('active');
+  S.currentTab = name;
+}
+
+function updateBrowserUrl(url) {
+  browserUrlText.textContent = url || '-';
+}
+
+function updateBrowserScreenshot(b64, url, title) {
+  S.latestScreenshot = b64;
+  S.latestBrowserUrl = url;
+
+  const src = `data:image/png;base64,${b64}`;
+  browserScreen.src = src;
+  browserScreen.style.display = 'block';
+  browserEmptyMsg.style.display = 'none';
+  if (url) updateBrowserUrl(url);
+  showComputer();
+
+  // Auto switch to browser tab
+  switchTab('browser', document.getElementById('tab-btn-browser'));
+}
+
+function updateComputerTask(text) {
+  if (text) computerTaskText.textContent = text;
+}
+
+// Plan overview in computer panel
+function buildPlanOverview(plan) {
+  const steps = (plan && plan.steps) || [];
+  planOverviewList.innerHTML = steps.map((st, i) => {
+    const status = st.status || 'pending';
+    const numClass = status === 'completed' ? 'done' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : '';
+    const descClass = status === 'completed' ? 'done' : '';
+    return `
+      <div class="plan-step-overview" id="plan-ov-${st.id}">
+        <div class="plan-step-num ${numClass}">${i+1}</div>
+        <div class="plan-step-desc ${descClass}">${esc(st.description || '')}</div>
+        <div class="plan-step-arrow">${status === 'running' ? '›' : ''}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updatePlanOverviewStep(stepId, status) {
+  const el = document.getElementById(`plan-ov-${stepId}`);
+  if (!el) return;
+  const num = el.querySelector('.plan-step-num');
+  const desc = el.querySelector('.plan-step-desc');
+  const arrow = el.querySelector('.plan-step-arrow');
+  if (num) num.className = `plan-step-num ${status === 'completed' ? 'done' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : ''}`;
+  if (desc) desc.className = `plan-step-desc ${status === 'completed' ? 'done' : ''}`;
+  if (arrow) arrow.textContent = status === 'running' ? '›' : '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SSE Event Handler
+// ═══════════════════════════════════════════════════════════
+function handleEvent(evt) {
+  if (!evt || !evt.type) return;
+
+  switch (evt.type) {
+
+    case 'session':
+      S.sessionId = evt.session_id;
+      break;
+
+    case 'title':
+      document.title = (evt.title || 'Dzeck AI') + ' · Dzeck AI';
+      break;
+
+    case 'plan': {
+      const status = evt.status || '';
+      const plan = evt.plan;
+
+      if (status === 'creating') {
+        // Show planning indicator
+        if (!S.aiMsgEl) {
+          S.aiMsgEl = createAiMsgEl();
+          S.aiContent = '';
         }
-      });
+        break;
+      }
 
-      inputEl.addEventListener('input', () => {
-        inputEl.style.height = 'auto';
-        inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
-      });
+      if (status === 'created' && plan) {
+        S.plan = plan;
+        // Remove the typing bubble if it's still there for planning
+        if (S.aiMsgEl) {
+          S.aiMsgEl.closest('.msg')?.remove();
+          S.aiMsgEl = null;
+          S.aiContent = '';
+        }
+        createPlanCard(plan);
+        buildPlanOverview(plan);
+        showComputer();
+        updateComputerTask(plan.title || '');
+      }
 
-      inputEl.focus();
-    </script>
-  </body>
+      if (status === 'running' && plan && !S.planCardEl) {
+        S.plan = plan;
+        createPlanCard(plan);
+        buildPlanOverview(plan);
+        showComputer();
+      }
+
+      if (status === 'updated' && plan) {
+        S.plan = plan;
+        // Rebuild if new steps were added
+        const list = document.getElementById('plan-steps-list');
+        if (list && plan.steps) {
+          plan.steps.forEach(st => {
+            if (!document.getElementById(`step-row-${st.id}`)) {
+              const row = document.createElement('div');
+              row.innerHTML = buildStepRow(st);
+              list.appendChild(row.firstElementChild);
+              S.stepEls[st.id] = {
+                headerEl: list.querySelector(`#step-h-${st.id}`),
+                toolsEl:  list.querySelector(`#step-tools-${st.id}`),
+                statusEl: list.querySelector(`#step-status-${st.id}`),
+                toggleEl: list.querySelector(`#step-toggle-${st.id}`),
+              };
+              S.toolsByStep[st.id] = [];
+            }
+          });
+          buildPlanOverview(plan);
+          updatePlanCount();
+        }
+      }
+
+      if (status === 'completed' && plan) {
+        S.plan = plan;
+        updatePlanCount();
+        buildPlanOverview(plan);
+        // Mark all steps
+        (plan.steps || []).forEach(st => updateStepStatus(st.id, st.status || 'completed'));
+      }
+      break;
+    }
+
+    case 'step': {
+      const step = evt.step || {};
+      const status = evt.status || '';
+      const stepId = step.id;
+      if (!stepId) break;
+
+      // Update local plan reference
+      if (S.plan) {
+        const ps = S.plan.steps.find(s => s.id === stepId);
+        if (ps) ps.status = status;
+      }
+
+      updateStepStatus(stepId, status);
+      updatePlanOverviewStep(stepId, status);
+
+      if (status === 'running') {
+        S.currentStepId = stepId;
+        openStep(stepId);
+        updateComputerTask(step.description || '');
+        if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
+      }
+      break;
+    }
+
+    case 'tool': {
+      const status = evt.status || '';
+      const toolCallId = evt.tool_call_id || `tool_${Date.now()}`;
+      const stepId = S.currentStepId;
+
+      if (status === 'calling') {
+        if (stepId) {
+          if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
+          S.toolsByStep[stepId].push(toolCallId);
+          addToolItem(stepId, toolCallId, evt);
+        }
+        computerPanel.classList.add('visible');
+        S.computerVisible = true;
+        inputArea.classList.add('with-panel');
+      }
+
+      if (status === 'called' || status === 'error') {
+        updateToolItem(toolCallId, evt);
+      }
+      break;
+    }
+
+    case 'message_start':
+      // Create fresh AI bubble for streaming response
+      if (S.aiMsgEl) {
+        // finalize previous
+        S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
+        S.aiMsgEl.removeAttribute('id');
+      }
+      S.aiMsgEl = createAiMsgEl();
+      S.aiContent = '';
+      break;
+
+    case 'message_chunk': {
+      const token = evt.chunk || '';
+      if (!token) break;
+      if (!S.aiMsgEl) {
+        S.aiMsgEl = createAiMsgEl();
+        S.aiContent = '';
+      }
+      S.aiContent += token;
+      S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent) + '<span class="cursor"></span>';
+      scrollBottom();
+      break;
+    }
+
+    case 'message_end':
+      if (S.aiMsgEl) {
+        S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
+        S.aiMsgEl.removeAttribute('id');
+        S.aiMsgEl = null;
+        S.aiContent = '';
+      }
+      break;
+
+    case 'done':
+      finalizeResponse();
+      break;
+
+    case 'error':
+      showError(evt.error || 'Terjadi kesalahan');
+      if (S.aiMsgEl) {
+        S.aiMsgEl.innerHTML = `<em style="color:var(--error)">Gagal: ${esc(evt.error || 'Error')}</em>`;
+        S.aiMsgEl = null;
+        S.aiContent = '';
+      }
+      break;
+  }
+}
+
+function finalizeResponse() {
+  if (S.aiMsgEl && S.aiContent) {
+    S.aiMsgEl.innerHTML = renderMarkdown(S.aiContent);
+    S.aiMsgEl.removeAttribute('id');
+  } else if (S.aiMsgEl) {
+    S.aiMsgEl.closest('.msg')?.remove();
+  }
+  S.aiMsgEl = null;
+  S.aiContent = '';
+  S.currentStepId = null;
+  setStreaming(false);
+  scrollBottom();
+  // Don't hide computer panel — let user see result
+}
+
+// ═══════════════════════════════════════════════════════════
+// Send Message
+// ═══════════════════════════════════════════════════════════
+let messageHistory = [];
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || S.isStreaming) return;
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  appendUserMsg(text);
+  messageHistory.push({ role: 'user', content: text });
+
+  // Reset state for new message
+  S.planCardEl = null;
+  S.stepEls = {};
+  S.toolEls = {};
+  S.toolsByStep = {};
+  S.plan = null;
+  S.currentStepId = null;
+
+  setStreaming(true);
+  S.abortController = new AbortController();
+
+  try {
+    const resp = await fetch('/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        messages: messageHistory.slice(0, -1),
+        session_id: S.sessionId,
+      }),
+      signal: S.abortController.signal,
+    });
+
+    if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const d = line.slice(6).trim();
+        if (d === '[DONE]') { finalizeResponse(); return; }
+        try { handleEvent(JSON.parse(d)); } catch {}
+      }
+    }
+    finalizeResponse();
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    console.error(err);
+    if (S.aiMsgEl) {
+      S.aiMsgEl.innerHTML = '<em style="color:var(--error)">Koneksi gagal. Coba lagi.</em>';
+      S.aiMsgEl = null;
+    }
+    showError('Gagal terhubung ke AI. Periksa koneksi.');
+    setStreaming(false);
+  }
+}
+
+function stopGeneration() {
+  if (S.abortController) { S.abortController.abort(); S.abortController = null; }
+  finalizeResponse();
+}
+
+function sendSuggestion(el) {
+  inputEl.value = el.textContent;
+  sendMessage();
+}
+
+// ─── Keyboard ───────────────────────────────────────────────
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.computerFullscreen) toggleComputerFullscreen();
+});
+
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+});
+
+// ═══════════════════════════════════════════════════════════
+// Screenshot modal
+// ═══════════════════════════════════════════════════════════
+function openScreenshot(src) {
+  const modal = document.getElementById('screenshot-modal');
+  document.getElementById('screenshot-modal-img').src = src;
+  modal.classList.add('open');
+}
+function closeScreenshot() {
+  document.getElementById('screenshot-modal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════
+inputEl.focus();
+</script>
+</body>
 </html>
