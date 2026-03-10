@@ -1,4 +1,3 @@
-import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import { spawn } from "node:child_process";
 import * as https from "node:https";
@@ -14,14 +13,6 @@ function getCFConfig() {
   return { cfPath, apiKey, model, agentModel };
 }
 
-function sendSSEError(res: any, message: string) {
-  if (!res.writableEnded) {
-    res.write(`data: ${JSON.stringify({ type: "error", error: message })}\n\n`);
-    res.write("data: [DONE]\n\n");
-    res.end();
-  }
-}
-
 function setupSSEHeaders(res: any) {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -30,6 +21,9 @@ function setupSSEHeaders(res: any) {
   res.flushHeaders();
 }
 
+/**
+ * Non-streaming chat endpoint - collects full response before sending
+ */
 export async function registerRoutes(app: Express): Promise<Server> {
   const startupCfg = getCFConfig();
   if (!startupCfg.apiKey) {
@@ -44,8 +38,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // ─── Chat endpoint — streams Cloudflare Workers AI SSE ─────────────────
-  app.post("/api/chat", (req, res) => {
+  // ─── Non-streaming Chat endpoint ─────────────────────────────────────
+  app.post("/api/chat", async (req, res) => {
     const { messages } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
@@ -53,13 +47,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return;
     }
 
-    setupSSEHeaders(res);
-
     const { cfPath, apiKey } = getCFConfig();
 
     const requestBody = JSON.stringify({
       messages,
-      stream: true,
+      stream: false,
       max_tokens: 4096,
     });
 
@@ -99,95 +91,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.warn(`CF API ${apiRes.statusCode}, retry ${retryCount}/${maxRetries} in ${wait}ms`);
             setTimeout(attemptRequest, wait);
           } else {
-            sendSSEError(res, "AI service rate limited, please try again");
+            res.status(503).json({ error: "AI service rate limited, please try again" });
           }
           return;
         }
 
-        let apiBuffer = "";
-        let streamDone = false;
+        let buffer = "";
 
         apiRes.on("data", (chunk: Buffer) => {
-          apiBuffer += chunk.toString();
-          const lines = apiBuffer.split("\n");
-          apiBuffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") {
-              streamDone = true;
-              if (!res.writableEnded) {
-                res.write("data: [DONE]\n\n");
-                res.end();
-              }
-              return;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              const content =
-                parsed.response ??
-                parsed.choices?.[0]?.delta?.content ??
-                parsed.content ??
-                "";
-
-              if (
-                content &&
-                (content.includes("Ratelimit") || content.includes("ratelimit"))
-              ) {
-                apiRes.destroy();
-                if (retryCount < maxRetries) {
-                  retryCount++;
-                  const wait = Math.pow(2, retryCount) * 1000;
-                  setTimeout(attemptRequest, wait);
-                } else {
-                  sendSSEError(res, "AI service rate limited, please try again later");
-                }
-                return;
-              }
-
-              if (content) {
-                res.write(`data: ${JSON.stringify({ content })}\n\n`);
-              }
-            } catch {
-              // Skip malformed JSON chunks
-            }
-          }
+          buffer += chunk.toString();
         });
 
         apiRes.on("end", () => {
-          if (!streamDone && !res.writableEnded) {
-            res.write("data: [DONE]\n\n");
-            res.end();
+          try {
+            const parsed = JSON.parse(buffer);
+            const content =
+              parsed.response ??
+              parsed.choices?.[0]?.message?.content ??
+              parsed.result?.response ??
+              "";
+
+            if (!content) {
+              return res.status(500).json({ error: "Empty response from AI" });
+            }
+
+            // Send complete response (non-streaming)
+            res.json({
+              type: "message",
+              content: content,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.error("Parse error:", error);
+            res.status(500).json({ error: "Failed to parse AI response" });
           }
         });
 
         apiRes.on("error", (err) => {
           console.error("CF API response error:", err);
-          sendSSEError(res, "AI service error");
+          res.status(500).json({ error: "AI service error" });
         });
       });
 
       apiReq.on("error", (err) => {
         console.error("CF API request error:", err);
-        sendSSEError(res, "AI service connection error");
+        res.status(500).json({ error: "AI service connection error" });
       });
 
       apiReq.write(requestBody);
       apiReq.end();
-
-      res.on("close", () => {
-        apiReq.destroy();
-      });
     };
 
     attemptRequest();
   });
 
-  // ─── Agent endpoint — spawns async Python agent ────────────────────────
+  // ─── Agent endpoint with SSE (non-streaming per message) ────────────────────────────────────────────────────────
   app.post("/api/agent", (req, res) => {
     const { message, messages, model, attachments, session_id, resume_from_session } = req.body;
 
@@ -251,249 +209,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     proc.stderr.on("data", (data: Buffer) => {
-      console.error("agent stderr:", data.toString());
-    });
-
-    proc.on("close", () => {
-      if (!res.writableEnded) {
-        if (!doneSent) {
-          res.write("data: [DONE]\n\n");
-        }
-        res.end();
+      const stderr = data.toString();
+      console.error("[Agent stderr]:", stderr);
+      if (!doneSent && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: "error", error: stderr })}\n\n`);
       }
     });
-
-    proc.on("error", (err) => {
-      console.error("agent process error:", err);
-      sendSSEError(res, "Agent service error");
-    });
-
-    res.on("close", () => {
-      if (!proc.killed) {
-        proc.kill();
-      }
-    });
-  });
-
-  // ─── Session management endpoints ─────────────────────────────────────
-
-  app.get("/api/sessions", async (req, res) => {
-    try {
-      const limit = parseInt((req.query.limit as string) || "20", 10);
-      const status = (req.query.status as string) || undefined;
-
-      const result = await runPythonScript("list_sessions", { limit, status });
-      res.json(result);
-    } catch (err) {
-      console.error("list sessions error:", err);
-      res.status(500).json({ error: "Failed to list sessions", sessions: [] });
-    }
-  });
-
-  app.get("/api/sessions/:sessionId", async (req, res) => {
-    try {
-      const result = await runPythonScript("get_session", {
-        session_id: req.params.sessionId,
-      });
-      if (!result) {
-        res.status(404).json({ error: "Session not found" });
-        return;
-      }
-      res.json(result);
-    } catch (err) {
-      console.error("get session error:", err);
-      res.status(500).json({ error: "Failed to get session" });
-    }
-  });
-
-  app.post("/api/sessions/:sessionId/rollback", async (req, res) => {
-    try {
-      const { to_step_id } = req.body;
-      const result = await runPythonScript("rollback_session", {
-        session_id: req.params.sessionId,
-        to_step_id: to_step_id || null,
-      });
-      res.json(result || { success: false, error: "Session not found" });
-    } catch (err) {
-      console.error("rollback error:", err);
-      res.status(500).json({ error: "Rollback failed" });
-    }
-  });
-
-  app.post("/api/sessions/:sessionId/resume", (req, res) => {
-    const { message } = req.body;
-    const sessionId = req.params.sessionId;
-
-    if (!message) {
-      res.status(400).json({ error: "message is required for resume" });
-      return;
-    }
-
-    setupSSEHeaders(res);
-
-    const { apiKey, agentModel } = getCFConfig();
-
-    const proc = spawn("python3", ["-u", "-m", "server.agent.agent_flow"], {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        CF_API_KEY: apiKey,
-        CF_AGENT_MODEL: agentModel,
-        PYTHONPATH: process.cwd(),
-        PYTHONUNBUFFERED: "1",
-      },
-    });
-
-    const input = JSON.stringify({
-      message,
-      messages: [],
-      model: agentModel,
-      attachments: [],
-      session_id: sessionId,
-      resume_from_session: sessionId,
-    });
-    proc.stdin.write(input);
-    proc.stdin.end();
-
-    let buffer = "";
-    let doneSent = false;
-
-    proc.stdout.on("data", (data: Buffer) => {
-      buffer += data.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.type === "done") {
-            doneSent = true;
-            res.write("data: [DONE]\n\n");
-          } else {
-            res.write(`data: ${JSON.stringify(parsed)}\n\n`);
-          }
-        } catch {
-          // Skip
-        }
-      }
-    });
-
-    proc.stderr.on("data", (data: Buffer) => {
-      console.error("resume agent stderr:", data.toString());
-    });
-
-    proc.on("close", () => {
-      if (!res.writableEnded) {
-        if (!doneSent) res.write("data: [DONE]\n\n");
-        res.end();
-      }
-    });
-
-    proc.on("error", (err) => {
-      console.error("resume process error:", err);
-      sendSSEError(res, "Resume service error");
-    });
-
-    res.on("close", () => {
-      if (!proc.killed) proc.kill();
-    });
-  });
-
-  app.get("/api/sessions/:sessionId/events", async (req, res) => {
-    try {
-      const event_type = (req.query.event_type as string) || undefined;
-      const result = await runPythonScript("get_session_events", {
-        session_id: req.params.sessionId,
-        event_type: event_type || null,
-      });
-      res.json(result || []);
-    } catch (err) {
-      console.error("get events error:", err);
-      res.status(500).json({ error: "Failed to get events", events: [] });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
-}
-
-// ─── Python Session Script Bridge ─────────────────────────────────────────
-async function runPythonScript(
-  action: string,
-  params: Record<string, any>
-): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("python3", ["-c", `
-import sys, json, asyncio
-sys.path.insert(0, '.')
-
-async def main():
-    action = ${JSON.stringify(action)}
-    params = json.loads(sys.stdin.read())
-    try:
-        from server.agent.services.session_service import get_session_service
-        svc = await get_session_service()
-        if action == 'list_sessions':
-            result = await svc.list_sessions(
-                limit=params.get('limit', 20),
-                status=params.get('status')
-            )
-            print(json.dumps(result, default=str))
-        elif action == 'get_session':
-            result = await svc.get_session(params['session_id'])
-            print(json.dumps(result, default=str))
-        elif action == 'rollback_session':
-            result = await svc.rollback_session(
-                params['session_id'],
-                to_step_id=params.get('to_step_id')
-            )
-            print(json.dumps(result, default=str))
-        elif action == 'get_session_events':
-            result = await svc.get_session_events(
-                params['session_id'],
-                event_type=params.get('event_type')
-            )
-            print(json.dumps(result, default=str))
-        else:
-            print(json.dumps({'error': 'Unknown action'}))
-    except Exception as e:
-        print(json.dumps({'error': str(e)}))
-
-asyncio.run(main())
-`],
-      {
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd: process.cwd(),
-        env: { ...process.env, PYTHONPATH: process.cwd() },
-      }
-    );
-
-    proc.stdin.write(JSON.stringify(params));
-    proc.stdin.end();
-
-    let output = "";
-    let errOutput = "";
-
-    proc.stdout.on("data", (d: Buffer) => { output += d.toString(); });
-    proc.stderr.on("data", (d: Buffer) => { errOutput += d.toString(); });
 
     proc.on("close", (code) => {
-      if (errOutput) console.error("python session script stderr:", errOutput);
-      try {
-        const lines = output.trim().split("\n").filter(Boolean);
-        const lastLine = lines[lines.length - 1];
-        resolve(JSON.parse(lastLine || "null"));
-      } catch {
-        resolve(null);
+      if (!doneSent && !res.writableEnded) {
+        res.write("data: [DONE]\n\n");
+      }
+      res.end();
+      if (code !== 0) {
+        console.error(`Agent process exited with code ${code}`);
       }
     });
 
-    proc.on("error", reject);
-
-    setTimeout(() => {
-      if (!proc.killed) proc.kill();
-      reject(new Error("Python script timeout"));
-    }, 15000);
+    res.on("close", () => {
+      proc.kill();
+    });
   });
+
+  // ─── Simple test endpoint ────────────────────────────────────────────
+  app.get("/api/test", (req, res) => {
+    res.json({
+      message: "API is working",
+      timestamp: new Date().toISOString(),
+      cloudflareConfigured: !!startupCfg.apiKey,
+    });
+  });
+
+  return createServer(app);
 }
