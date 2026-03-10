@@ -238,6 +238,7 @@ export default function ChatScreen() {
       streamingMsgIdRef.current = null;
       currentStepIdRef.current = null;
       planViewAddedRef.current = false;
+      computerViewAddedRef.current = false;
 
       const userItem: ChatListItem = {
         kind: "chat",

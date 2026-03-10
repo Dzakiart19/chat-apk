@@ -510,9 +510,8 @@ def call_cf_streaming(messages: list, emit_events: bool = True) -> str:
         method="POST",
     )
 
-    if emit_events:
-        emit_event("message_start", role="assistant")
     full_text = ""
+    started = False  # Track whether message_start has been emitted
 
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
@@ -539,19 +538,25 @@ def call_cf_streaming(messages: list, emit_events: bool = True) -> str:
                         )
                         if content:
                             if emit_events:
+                                if not started:
+                                    emit_event("message_start", role="assistant")
+                                    started = True
                                 emit_event("message_chunk", chunk=content, role="assistant")
                             full_text += content
                     except (json.JSONDecodeError, IndexError, KeyError):
                         pass
     except Exception as e:
         if not full_text and emit_events:
+            if not started:
+                emit_event("message_start", role="assistant")
+                started = True
             emit_event("message_chunk",
                        chunk="I'm sorry, I encountered an error.",
                        role="assistant")
         sys.stderr.write("Streaming error: {}\n".format(e))
         sys.stderr.flush()
 
-    if emit_events:
+    if emit_events and started:
         emit_event("message_end", role="assistant")
     return full_text
 
