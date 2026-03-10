@@ -54,19 +54,6 @@ function getApiUrl(): string {
   return `http://localhost:${port}/`;
 }
 
-const AGENT_SUGGESTIONS = [
-  "Cari berita AI terbaru dan rangkum",
-  "Riset dan bandingkan layanan cloud storage",
-  "Tulis script Python untuk rename file",
-  "Analisis website dan buat laporan",
-];
-
-const CHAT_SUGGESTIONS = [
-  "Jelaskan quantum computing secara sederhana",
-  "Tulis surat lamaran untuk software engineer",
-  "Terjemahkan ke bahasa Inggris: Halo, apa kabar?",
-  "Berikan 5 ide sarapan sehat",
-];
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -562,12 +549,6 @@ export default function ChatScreen() {
     sessionIdRef.current = session.id;
   }, []);
 
-  const handleSuggestion = useCallback(
-    (text: string) => {
-      handleSend(text, []);
-    },
-    [handleSend],
-  );
 
   // --- Render ---
   const renderChatMessage = useCallback(
@@ -624,9 +605,6 @@ export default function ChatScreen() {
     isGenerating &&
     messages.length > 0 &&
     messages[messages.length - 1].content === "";
-
-  const suggestions = isAgentMode ? AGENT_SUGGESTIONS : CHAT_SUGGESTIONS;
-
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
