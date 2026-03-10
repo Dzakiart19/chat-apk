@@ -31,16 +31,20 @@ export function AgentMessage({ event }: AgentMessageProps) {
       if (!event.message && !event.isStreaming) return null;
       return (
         <View style={styles.container}>
-          <View style={styles.messageRow}>
-            <View style={styles.avatar}>
-              <Ionicons name="sparkles" size={13} color="#FFFFFF" />
+          <View style={styles.agentHeader}>
+            <View style={styles.agentIcon}>
+              <Ionicons name="flash" size={12} color="#FFFFFF" />
             </View>
-            <View style={styles.bubble}>
-              <Text style={styles.messageText} selectable>
-                {event.message || ""}
-                {event.isStreaming ? <StreamingCursor /> : null}
-              </Text>
+            <Text style={styles.agentName}>dzeck</Text>
+            <View style={styles.agentBadge}>
+              <Text style={styles.agentBadgeText}>Lite</Text>
             </View>
+          </View>
+          <View style={styles.messageBubble}>
+            <Text style={styles.messageText} selectable>
+              {event.message || ""}
+              {event.isStreaming ? <StreamingCursor /> : null}
+            </Text>
           </View>
         </View>
       );
@@ -62,7 +66,7 @@ export function AgentMessage({ event }: AgentMessageProps) {
         <View style={styles.container}>
           <View style={styles.errorRow}>
             <Ionicons name="alert-circle" size={14} color="#FF453A" />
-            <Text style={styles.errorText}>{event.error || "An error occurred"}</Text>
+            <Text style={styles.errorText}>{event.error || "Terjadi kesalahan"}</Text>
           </View>
         </View>
       );
@@ -75,32 +79,40 @@ export function AgentMessage({ event }: AgentMessageProps) {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
-  messageRow: {
+  agentHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
   },
-  avatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  agentIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     backgroundColor: "#6C5CE7",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
-    marginTop: 1,
   },
-  bubble: {
-    flex: 1,
-    backgroundColor: "#141418",
-    borderRadius: 16,
-    borderBottomLeftRadius: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "#222228",
+  agentName: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
+    color: "#E8E8ED",
+  },
+  agentBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: "#2C2C30",
+  },
+  agentBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 10,
+    color: "#8E8E93",
+  },
+  messageBubble: {
+    paddingLeft: 28,
   },
   messageText: {
     fontFamily: "Inter_400Regular",

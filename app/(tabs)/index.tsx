@@ -55,17 +55,17 @@ function getApiUrl(): string {
 }
 
 const AGENT_SUGGESTIONS = [
-  "Search latest AI news and summarize it",
-  "Find the top 5 JavaScript frameworks in 2025",
-  "Research and compare cloud storage options",
-  "Write a Python script to rename files",
+  "Cari berita AI terbaru dan rangkum",
+  "Riset dan bandingkan layanan cloud storage",
+  "Tulis script Python untuk rename file",
+  "Analisis website dan buat laporan",
 ];
 
 const CHAT_SUGGESTIONS = [
-  "Explain quantum computing simply",
-  "Write a cover letter for a software engineer",
-  "Translate this to Spanish: Hello, how are you?",
-  "Give me 5 healthy breakfast ideas",
+  "Jelaskan quantum computing secara sederhana",
+  "Tulis surat lamaran untuk software engineer",
+  "Terjemahkan ke bahasa Inggris: Halo, apa kabar?",
+  "Berikan 5 ide sarapan sehat",
 ];
 
 export default function ChatScreen() {
@@ -636,132 +636,60 @@ export default function ChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={0}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View
-              style={[styles.headerIcon, isAgentMode && styles.headerIconAgent]}
-            >
-              <Ionicons
-                name={isAgentMode ? "rocket" : "sparkles"}
-                size={16}
-                color="#FFFFFF"
-              />
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>
-                {isAgentMode ? "Dzeck Agent" : "Dzeck AI"}
-              </Text>
-              {isAgentMode && (
-                <Text style={styles.headerSubtitle}>Autonomous Mode</Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.headerRight}>
-            {/* Mode Toggle */}
-            <TouchableOpacity
-              onPress={toggleMode}
-              style={[
-                styles.modeToggle,
-                isAgentMode && styles.modeToggleActive,
-              ]}
-              activeOpacity={0.6}
-              disabled={isGenerating}
-            >
-              <Ionicons
-                name={isAgentMode ? "flash" : "chatbubble"}
-                size={14}
-                color={isAgentMode ? "#6C5CE7" : "#8E8E93"}
-              />
-              <Text
-                style={[
-                  styles.modeToggleText,
-                  isAgentMode && styles.modeToggleTextActive,
-                ]}
+        {/* Header - only show when there is content */}
+        {hasContent && (
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={handleClearChat}
+                style={styles.backBtn}
+                activeOpacity={0.6}
               >
-                {isAgentMode ? "Agent" : "Chat"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* History button */}
-            <TouchableOpacity
-              onPress={() => setShowHistory(true)}
-              style={styles.iconBtn}
-              activeOpacity={0.6}
-            >
-              <Ionicons name="time-outline" size={20} color="#8E8E93" />
-            </TouchableOpacity>
-
-            {/* New chat button */}
-            {hasContent && (
+                <Ionicons name="chevron-back" size={22} color="#E8E8ED" />
+              </TouchableOpacity>
+              <View style={styles.headerTitleRow}>
+                <Text style={styles.headerTitle}>
+                  {isAgentMode ? "Dzeck Agent" : "Dzeck AI"}
+                </Text>
+                <View style={[styles.headerBadge, isAgentMode && styles.headerBadgeAgent]}>
+                  <Text style={[styles.headerBadgeText, isAgentMode && styles.headerBadgeTextAgent]}>
+                    {isAgentMode ? "Agent" : "Lite"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                onPress={() => setShowHistory(true)}
+                style={styles.iconBtn}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="time-outline" size={20} color="#8E8E93" />
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleClearChat}
                 style={styles.iconBtn}
                 activeOpacity={0.6}
               >
-                <Ionicons name="create-outline" size={22} color="#8E8E93" />
+                <Ionicons name="add-outline" size={22} color="#8E8E93" />
               </TouchableOpacity>
-            )}
+              <TouchableOpacity
+                style={styles.iconBtn}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="ellipsis-horizontal" size={20} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Content */}
         {!hasContent ? (
-          /* Empty state */
+          /* Clean empty state - Manus style */
           <View style={styles.emptyState}>
-            <View
-              style={[
-                styles.emptyIcon,
-                isAgentMode && styles.emptyIconAgent,
-              ]}
-            >
-              <Ionicons
-                name={isAgentMode ? "rocket" : "sparkles"}
-                size={32}
-                color="#6C5CE7"
-              />
-            </View>
             <Text style={styles.emptyTitle}>
-              {isAgentMode ? "Dzeck Agent" : "Dzeck AI"}
+              Apa yang bisa saya bantu?
             </Text>
-            <Text style={styles.emptySubtitle}>
-              {isAgentMode
-                ? "Give me a complex task and I'll execute it step by step"
-                : "How can I help you today?"}
-            </Text>
-            {isAgentMode && (
-              <View style={styles.agentCapabilities}>
-                {[
-                  { icon: "search", label: "Web Search" },
-                  { icon: "globe", label: "Browse Web" },
-                  { icon: "terminal", label: "Run Code" },
-                  { icon: "document-text", label: "Read Files" },
-                ].map((cap) => (
-                  <View key={cap.label} style={styles.capabilityBadge}>
-                    <Ionicons
-                      name={cap.icon as keyof typeof Ionicons.glyphMap}
-                      size={12}
-                      color="#6C5CE7"
-                    />
-                    <Text style={styles.capabilityText}>{cap.label}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {/* Suggestions */}
-            <View style={styles.suggestions}>
-              <Text style={styles.suggestionsLabel}>Try asking:</Text>
-              {suggestions.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={styles.suggestionPill}
-                  onPress={() => handleSuggestion(s)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
         ) : isAgentMode ? (
           /* Agent feed */
@@ -813,10 +741,14 @@ export default function ChatScreen() {
           disabled={false}
           isGenerating={isGenerating}
           onStop={handleStop}
+          isAgentMode={isAgentMode}
+          onToggleMode={toggleMode}
+          onShowHistory={() => setShowHistory(true)}
+          showModeToggle={!hasContent}
           placeholder={
             isAgentMode
-              ? "Give me a task to execute autonomously..."
-              : "Message Dzeck AI..."
+              ? "Tetapkan tugas atau tanyakan apa saja"
+              : "Kirim pesan ke Dzeck AI..."
           }
         />
       </KeyboardAvoidingView>
@@ -844,68 +776,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#1E1E24",
+    borderBottomColor: "#1A1A1F",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 4,
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-  },
-  headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "#6C5CE7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIconAgent: {
-    backgroundColor: "#5A4FCF",
-    borderWidth: 1,
-    borderColor: "rgba(108, 92, 231, 0.5)",
+    gap: 2,
   },
   headerTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 17,
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
     color: "#FFFFFF",
-    lineHeight: 22,
+    lineHeight: 20,
   },
-  headerSubtitle: {
-    fontFamily: "Inter_400Regular",
+  headerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "#2C2C30",
+  },
+  headerBadgeAgent: {
+    backgroundColor: "rgba(108, 92, 231, 0.15)",
+  },
+  headerBadgeText: {
+    fontFamily: "Inter_500Medium",
     fontSize: 10,
-    color: "#6C5CE7",
-    lineHeight: 14,
-    letterSpacing: 0.3,
-  },
-  modeToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: "#1A1A20",
-    borderWidth: 1,
-    borderColor: "#2C2C30",
-  },
-  modeToggleActive: {
-    backgroundColor: "rgba(108, 92, 231, 0.12)",
-    borderColor: "rgba(108, 92, 231, 0.3)",
-  },
-  modeToggleText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 12,
     color: "#8E8E93",
   },
-  modeToggleTextActive: {
+  headerBadgeTextAgent: {
     color: "#6C5CE7",
   },
   iconBtn: {
@@ -936,81 +853,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
-    gap: 10,
-  },
-  emptyIcon: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    backgroundColor: "rgba(108, 92, 231, 0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  emptyIconAgent: {
-    borderWidth: 1,
-    borderColor: "rgba(108, 92, 231, 0.3)",
   },
   emptyTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 24,
-    color: "#FFFFFF",
-  },
-  emptySubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    color: "#8E8E93",
+    fontFamily: "Inter_500Medium",
+    fontSize: 22,
+    color: "#E8E8ED",
     textAlign: "center",
-    lineHeight: 22,
-  },
-  agentCapabilities: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  capabilityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: "rgba(108, 92, 231, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(108, 92, 231, 0.18)",
-  },
-  capabilityText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    color: "#8E8E93",
-  },
-  suggestions: {
-    width: "100%",
-    gap: 8,
-    marginTop: 8,
-  },
-  suggestionsLabel: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: "#636366",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  suggestionPill: {
-    backgroundColor: "#141418",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "#2C2C30",
-    width: "100%",
-  },
-  suggestionText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: "#C8C8D4",
-    lineHeight: 18,
+    letterSpacing: -0.3,
   },
 });
