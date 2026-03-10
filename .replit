@@ -85,3 +85,10 @@ args = "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[userenv]
+
+[userenv.shared]
+CF_ACCOUNT_ID = "6c807fe58ad83714e772403cd528dbeb"
+CF_GATEWAY_NAME = "dzeck"
+CF_MODEL = "@cf/meta/llama-3-8b-instruct"

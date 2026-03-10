@@ -1,4 +1,9 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "react";
 import {
   View,
   Text,
@@ -15,12 +20,23 @@ import { ChatMessageBubble } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { TypingIndicator } from "@/components/TypingIndicator";
 import { AgentMessage } from "@/components/AgentMessage";
+import { AgentStatusBar } from "@/components/AgentStatusBar";
+import { ChatHistoryModal } from "@/components/ChatHistoryModal";
+import { AgentPlanView } from "@/components/AgentPlanView";
+import { AgentWorking } from "@/components/AgentThinking";
 import { streamChat, streamAgent } from "@/lib/chat";
+import {
+  saveChatSession,
+  buildSessionTitle,
+  buildSessionPreview,
+  type ChatSession,
+} from "@/lib/storage";
 import type {
   ChatMessage,
   ChatAttachment,
   AgentEvent,
   AgentPlan,
+  ChatListItem,
 } from "@/lib/chat";
 
 const SYSTEM_PROMPT = {
@@ -36,10 +52,19 @@ function getApiUrl(): string {
   return `http://localhost:${port}/`;
 }
 
-// Union type for items in our chat list (supports both chat messages and agent events)
-type ChatListItem =
-  | { kind: "chat"; data: ChatMessage }
-  | { kind: "agent"; data: AgentEvent; id: string };
+const AGENT_SUGGESTIONS = [
+  "Search latest AI news and summarize it",
+  "Find the top 5 JavaScript frameworks in 2025",
+  "Research and compare cloud storage options",
+  "Write a Python script to rename files",
+];
+
+const CHAT_SUGGESTIONS = [
+  "Explain quantum computing simply",
+  "Write a cover letter for a software engineer",
+  "Translate this to Spanish: Hello, how are you?",
+  "Give me 5 healthy breakfast ideas",
+];
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -47,8 +72,63 @@ export default function ChatScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAgentMode, setIsAgentMode] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<AgentPlan | null>(null);
+  const [agentStatus, setAgentStatus] = useState<{
+    label: string;
+    toolName?: string;
+    functionName?: string;
+  } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef<string>(Date.now().toString());
+
+  const scrollToBottom = useCallback((animated = true) => {
+    setTimeout(
+      () => flatListRef.current?.scrollToEnd({ animated }),
+      100,
+    );
+  }, []);
+
+  const autoSaveSession = useCallback(
+    async (
+      msgs: ChatMessage[],
+      events: ChatListItem[],
+      mode: "chat" | "agent",
+    ) => {
+      const hasContent =
+        mode === "chat"
+          ? msgs.some((m) => m.role === "assistant" && m.content)
+          : events.some(
+              (e) => e.kind === "agent" && e.data.type === "message",
+            );
+      if (!hasContent) return;
+
+      const session: ChatSession = {
+        id: sessionIdRef.current,
+        title: buildSessionTitle(msgs, events),
+        mode,
+        preview: buildSessionPreview(msgs, events),
+        timestamp: Date.now(),
+        messages: msgs,
+        agentEvents: mode === "agent" ? events : undefined,
+      };
+      await saveChatSession(session);
+    },
+    [],
+  );
+
+  // Auto-save when generation ends
+  const prevGeneratingRef = useRef(false);
+  useEffect(() => {
+    if (prevGeneratingRef.current && !isGenerating) {
+      if (isAgentMode) {
+        autoSaveSession([], agentEvents, "agent");
+      } else {
+        autoSaveSession(messages, [], "chat");
+      }
+    }
+    prevGeneratingRef.current = isGenerating;
+  }, [isGenerating, messages, agentEvents, isAgentMode, autoSaveSession]);
 
   // --- Regular Chat Mode ---
   const handleChatSend = useCallback(
@@ -62,10 +142,8 @@ export default function ChatScreen() {
         timestamp: Date.now(),
         attachments: attachments.length > 0 ? attachments : undefined,
       };
-
-      const assistantId = (Date.now() + 1).toString();
       const assistantMessage: ChatMessage = {
-        id: assistantId,
+        id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "",
         timestamp: Date.now(),
@@ -74,6 +152,7 @@ export default function ChatScreen() {
 
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setIsGenerating(true);
+      scrollToBottom();
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -84,7 +163,6 @@ export default function ChatScreen() {
           role: m.role,
           content: m.content,
         }));
-
         const allMessages = [SYSTEM_PROMPT, ...chatHistory];
 
         for await (const chunk of streamChat(
@@ -103,6 +181,7 @@ export default function ChatScreen() {
             }
             return updated;
           });
+          scrollToBottom();
         }
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -126,10 +205,7 @@ export default function ChatScreen() {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              isStreaming: false,
-            };
+            updated[lastIdx] = { ...updated[lastIdx], isStreaming: false };
           }
           return updated;
         });
@@ -137,7 +213,7 @@ export default function ChatScreen() {
         abortControllerRef.current = null;
       }
     },
-    [messages, isGenerating],
+    [messages, isGenerating, scrollToBottom],
   );
 
   // --- Agent Mode ---
@@ -145,7 +221,8 @@ export default function ChatScreen() {
     async (text: string, _attachments: ChatAttachment[]) => {
       if (isGenerating) return;
 
-      // Add user message to agent events
+      sessionIdRef.current = Date.now().toString();
+
       const userItem: ChatListItem = {
         kind: "chat",
         data: {
@@ -159,6 +236,8 @@ export default function ChatScreen() {
       setAgentEvents((prev) => [...prev, userItem]);
       setIsGenerating(true);
       setCurrentPlan(null);
+      setAgentStatus({ label: "Thinking..." });
+      scrollToBottom();
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -175,35 +254,54 @@ export default function ChatScreen() {
           eventCounter++;
           const eventId = `evt-${Date.now()}-${eventCounter}`;
 
-          // Track plan updates
+          // Update live plan state
           if (event.type === "plan" && event.plan) {
             setCurrentPlan(event.plan);
+            if (event.status === "running") {
+              setAgentStatus({ label: "Executing plan..." });
+            }
           }
 
-          // Update plan steps from step events
+          // Update live step status within plan
           if (event.type === "step" && event.step) {
             setCurrentPlan((prev) => {
               if (!prev) return prev;
-              const updatedSteps = prev.steps.map((s) =>
-                s.id === event.step?.id ? { ...s, ...event.step } : s,
-              );
-              return { ...prev, steps: updatedSteps };
+              return {
+                ...prev,
+                steps: prev.steps.map((s) =>
+                  s.id === event.step?.id ? { ...s, ...event.step } : s,
+                ),
+              };
             });
+            if (event.status === "running") {
+              setAgentStatus({
+                label: `Running: ${event.step.description}`,
+              });
+            }
           }
 
-          // Tool events: merge calling -> called by tool_call_id (ai-manus style)
-          // Show "calling" events immediately (with spinner), then update to "called" with result
+          // Track active tool for status bar
           if (event.type === "tool") {
-            const toolCallId = event.tool_call_id;
-
             if (event.status === "calling") {
-              // Add new tool card in "calling" state (shows spinner)
+              setAgentStatus({
+                label: event.function_name || "Using tool",
+                toolName: event.tool_name,
+                functionName: event.function_name,
+              });
+            } else if (event.status === "called") {
+              setAgentStatus({ label: "Processing result..." });
+            }
+
+            const toolCallId = event.tool_call_id;
+            if (event.status === "calling") {
               setAgentEvents((prev) => [
                 ...prev,
                 { kind: "agent", data: event, id: eventId },
               ]);
-            } else if (event.status === "called" || event.status === "error") {
-              // Merge with existing "calling" event by tool_call_id
+            } else if (
+              event.status === "called" ||
+              event.status === "error"
+            ) {
               setAgentEvents((prev) => {
                 const existingIdx = prev.findIndex(
                   (item) =>
@@ -213,39 +311,38 @@ export default function ChatScreen() {
                     item.data.status === "calling",
                 );
                 if (existingIdx >= 0) {
-                  // Update existing calling event to called/error
                   const updated = [...prev];
-                  updated[existingIdx] = {
-                    ...updated[existingIdx],
-                    data: event,
-                  };
+                  updated[existingIdx] = { ...updated[existingIdx], data: event };
                   return updated;
                 }
-                // No matching calling event found, add as new
-                return [
-                  ...prev,
-                  { kind: "agent", data: event, id: eventId },
-                ];
+                return [...prev, { kind: "agent", data: event, id: eventId }];
               });
             }
+            scrollToBottom();
             continue;
           }
 
-          // Filter out redundant events for cleaner UI
+          // Filter and display relevant events
           const shouldShow =
             event.type === "message" ||
             event.type === "title" ||
             event.type === "thinking" ||
             event.type === "error" ||
-            (event.type === "plan" && event.status === "created") ||
-            (event.type === "step" &&
-              (event.status === "running" || event.status === "completed"));
+            event.type === "wait";
 
           if (shouldShow) {
+            if (event.type === "thinking") {
+              setAgentStatus({ label: event.content || "Thinking..." });
+            }
             setAgentEvents((prev) => [
               ...prev,
               { kind: "agent", data: event, id: eventId },
             ]);
+            scrollToBottom();
+          }
+
+          if (event.type === "done") {
+            setAgentStatus(null);
           }
         }
       } catch (error) {
@@ -262,10 +359,12 @@ export default function ChatScreen() {
         ]);
       } finally {
         setIsGenerating(false);
+        setAgentStatus(null);
         abortControllerRef.current = null;
+        scrollToBottom();
       }
     },
-    [isGenerating],
+    [isGenerating, scrollToBottom],
   );
 
   const handleSend = useCallback(
@@ -282,6 +381,7 @@ export default function ChatScreen() {
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
     setIsGenerating(false);
+    setAgentStatus(null);
   }, []);
 
   const handleClearChat = useCallback(() => {
@@ -292,6 +392,8 @@ export default function ChatScreen() {
     setMessages([]);
     setAgentEvents([]);
     setCurrentPlan(null);
+    setAgentStatus(null);
+    sessionIdRef.current = Date.now().toString();
   }, [isGenerating]);
 
   const toggleMode = useCallback(() => {
@@ -300,7 +402,28 @@ export default function ChatScreen() {
     }
   }, [isGenerating]);
 
-  // --- Render helpers ---
+  const handleRestoreSession = useCallback((session: ChatSession) => {
+    setIsAgentMode(session.mode === "agent");
+    if (session.mode === "chat") {
+      setMessages(session.messages);
+      setAgentEvents([]);
+    } else {
+      setAgentEvents(session.agentEvents || []);
+      setMessages([]);
+    }
+    setCurrentPlan(null);
+    setAgentStatus(null);
+    sessionIdRef.current = session.id;
+  }, []);
+
+  const handleSuggestion = useCallback(
+    (text: string) => {
+      handleSend(text, []);
+    },
+    [handleSend],
+  );
+
+  // --- Render ---
   const renderChatMessage = useCallback(
     ({ item }: { item: ChatMessage }) => <ChatMessageBubble message={item} />,
     [],
@@ -333,8 +456,16 @@ export default function ChatScreen() {
     messages.length > 0 &&
     messages[messages.length - 1].content === "";
 
-  // Suppress unused variable warning - currentPlan is tracked for future use
-  void currentPlan;
+  const suggestions = isAgentMode ? AGENT_SUGGESTIONS : CHAT_SUGGESTIONS;
+
+  const AgentListHeader = useCallback(() => {
+    if (!currentPlan) return null;
+    return (
+      <View style={styles.planSection}>
+        <AgentPlanView plan={currentPlan} />
+      </View>
+    );
+  }, [currentPlan]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -348,10 +479,7 @@ export default function ChatScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View
-              style={[
-                styles.headerIcon,
-                isAgentMode && styles.headerIconAgent,
-              ]}
+              style={[styles.headerIcon, isAgentMode && styles.headerIconAgent]}
             >
               <Ionicons
                 name={isAgentMode ? "rocket" : "sparkles"}
@@ -359,9 +487,14 @@ export default function ChatScreen() {
                 color="#FFFFFF"
               />
             </View>
-            <Text style={styles.headerTitle}>
-              {isAgentMode ? "Dzeck Agent" : "Dzeck AI"}
-            </Text>
+            <View>
+              <Text style={styles.headerTitle}>
+                {isAgentMode ? "Dzeck Agent" : "Dzeck AI"}
+              </Text>
+              {isAgentMode && (
+                <Text style={styles.headerSubtitle}>Autonomous Mode</Text>
+              )}
+            </View>
           </View>
           <View style={styles.headerRight}>
             {/* Mode Toggle */}
@@ -389,11 +522,20 @@ export default function ChatScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Clear button */}
+            {/* History button */}
+            <TouchableOpacity
+              onPress={() => setShowHistory(true)}
+              style={styles.iconBtn}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="time-outline" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+
+            {/* New chat button */}
             {hasContent && (
               <TouchableOpacity
                 onPress={handleClearChat}
-                style={styles.clearButton}
+                style={styles.iconBtn}
                 activeOpacity={0.6}
               >
                 <Ionicons name="create-outline" size={22} color="#8E8E93" />
@@ -402,8 +544,9 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {/* Messages / Agent Events */}
+        {/* Content */}
         {!hasContent ? (
+          /* Empty state */
           <View style={styles.emptyState}>
             <View
               style={[
@@ -422,19 +565,45 @@ export default function ChatScreen() {
             </Text>
             <Text style={styles.emptySubtitle}>
               {isAgentMode
-                ? "Give me a task and I'll execute it autonomously"
+                ? "Give me a complex task and I'll execute it step by step"
                 : "How can I help you today?"}
             </Text>
             {isAgentMode && (
-              <View style={styles.agentBadge}>
-                <Ionicons name="flash" size={12} color="#6C5CE7" />
-                <Text style={styles.agentBadgeText}>
-                  Autonomous AI Agent Mode
-                </Text>
+              <View style={styles.agentCapabilities}>
+                {[
+                  { icon: "search", label: "Web Search" },
+                  { icon: "globe", label: "Browse Web" },
+                  { icon: "terminal", label: "Run Code" },
+                  { icon: "document-text", label: "Read Files" },
+                ].map((cap) => (
+                  <View key={cap.label} style={styles.capabilityBadge}>
+                    <Ionicons
+                      name={cap.icon as keyof typeof Ionicons.glyphMap}
+                      size={12}
+                      color="#6C5CE7"
+                    />
+                    <Text style={styles.capabilityText}>{cap.label}</Text>
+                  </View>
+                ))}
               </View>
             )}
+            {/* Suggestions */}
+            <View style={styles.suggestions}>
+              <Text style={styles.suggestionsLabel}>Try asking:</Text>
+              {suggestions.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={styles.suggestionPill}
+                  onPress={() => handleSuggestion(s)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.suggestionText}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ) : isAgentMode ? (
+          /* Agent feed */
           <FlatList
             ref={flatListRef}
             data={agentEvents}
@@ -442,25 +611,20 @@ export default function ChatScreen() {
             keyExtractor={agentKeyExtractor}
             style={styles.messageList}
             contentContainerStyle={styles.messageListContent}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: true })
-            }
-            onLayout={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={AgentListHeader}
             ListFooterComponent={
               isGenerating ? (
-                <View style={styles.agentWorking}>
-                  <Ionicons name="sync" size={14} color="#6C5CE7" />
-                  <Text style={styles.agentWorkingText}>
-                    Agent is working...
-                  </Text>
+                <View style={styles.agentFooter}>
+                  <AgentWorking
+                    label={agentStatus?.label || "Agent is working..."}
+                  />
                 </View>
               ) : null
             }
           />
         ) : (
+          /* Chat feed */
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -468,14 +632,18 @@ export default function ChatScreen() {
             keyExtractor={chatKeyExtractor}
             style={styles.messageList}
             contentContainerStyle={styles.messageListContent}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: true })
-            }
-            onLayout={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
             showsVerticalScrollIndicator={false}
             ListFooterComponent={showTyping ? <TypingIndicator /> : null}
+          />
+        )}
+
+        {/* Agent active status bar */}
+        {isAgentMode && isGenerating && agentStatus?.functionName && (
+          <AgentStatusBar
+            status={agentStatus.label}
+            toolName={agentStatus.toolName}
+            functionName={agentStatus.functionName}
+            isActive={true}
           />
         )}
 
@@ -485,8 +653,20 @@ export default function ChatScreen() {
           disabled={false}
           isGenerating={isGenerating}
           onStop={handleStop}
+          placeholder={
+            isAgentMode
+              ? "Give me a task to execute autonomously..."
+              : "Message Dzeck AI..."
+          }
         />
       </KeyboardAvoidingView>
+
+      {/* History modal */}
+      <ChatHistoryModal
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+        onRestoreSession={handleRestoreSession}
+      />
     </SafeAreaView>
   );
 }
@@ -505,7 +685,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#1E1E24",
   },
@@ -517,12 +697,12 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   headerIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: "#6C5CE7",
     alignItems: "center",
     justifyContent: "center",
@@ -534,8 +714,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 18,
+    fontSize: 17,
     color: "#FFFFFF",
+    lineHeight: 22,
+  },
+  headerSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+    color: "#6C5CE7",
+    lineHeight: 14,
+    letterSpacing: 0.3,
   },
   modeToggle: {
     flexDirection: "row",
@@ -560,30 +748,44 @@ const styles = StyleSheet.create({
   modeToggleTextActive: {
     color: "#6C5CE7",
   },
-  clearButton: {
-    padding: 6,
+  iconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
   },
   messageList: {
     flex: 1,
   },
   messageListContent: {
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  planSection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  agentFooter: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   emptyState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 40,
-    gap: 12,
+    paddingHorizontal: 28,
+    gap: 10,
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     backgroundColor: "rgba(108, 92, 231, 0.12)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   emptyIconAgent: {
     borderWidth: 1,
@@ -591,42 +793,64 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: "Inter_700Bold",
-    fontSize: 26,
+    fontSize: 24,
     color: "#FFFFFF",
   },
   emptySubtitle: {
     fontFamily: "Inter_400Regular",
-    fontSize: 16,
+    fontSize: 15,
     color: "#8E8E93",
     textAlign: "center",
+    lineHeight: 22,
   },
-  agentBadge: {
+  agentCapabilities: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(108, 92, 231, 0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "rgba(108, 92, 231, 0.2)",
-  },
-  agentBadgeText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 12,
-    color: "#6C5CE7",
-  },
-  agentWorking: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 12,
+    marginTop: 4,
   },
-  agentWorkingText: {
+  capabilityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: "rgba(108, 92, 231, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(108, 92, 231, 0.18)",
+  },
+  capabilityText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    color: "#8E8E93",
+  },
+  suggestions: {
+    width: "100%",
+    gap: 8,
+    marginTop: 8,
+  },
+  suggestionsLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#636366",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  suggestionPill: {
+    backgroundColor: "#141418",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#2C2C30",
+    width: "100%",
+  },
+  suggestionText: {
     fontFamily: "Inter_400Regular",
     fontSize: 13,
-    color: "#6C5CE7",
+    color: "#C8C8D4",
+    lineHeight: 18,
   },
 });

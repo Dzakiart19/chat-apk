@@ -3,15 +3,21 @@ import { createServer, type Server } from "node:http";
 import { spawn } from "node:child_process";
 import * as https from "node:https";
 
-const AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions";
-const AIRFORCE_API_KEY = process.env.AIRFORCE_API_KEY || "";
-
-if (!AIRFORCE_API_KEY) {
-  console.warn("[WARNING] AIRFORCE_API_KEY is not set. AI features will not work.");
+function getCFConfig() {
+  const accountId = process.env.CF_ACCOUNT_ID || "";
+  const gatewayName = process.env.CF_GATEWAY_NAME || "";
+  const model = process.env.CF_MODEL || "@cf/meta/llama-3-8b-instruct";
+  const apiKey = process.env.CF_API_KEY || "";
+  // Build path directly — do NOT encodeURIComponent the model (slashes are part of path)
+  const cfPath = `/v1/${accountId}/${gatewayName}/workers-ai/run/${model}`;
+  return { cfPath, apiKey, model };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check / status endpoint
+  const startupCfg = getCFConfig();
+  if (!startupCfg.apiKey) {
+    console.warn("[WARNING] CF_API_KEY is not set. AI features will not work.");
+  }
   app.get("/status", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
@@ -20,9 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Chat API endpoint with SSE streaming - calls airforce API directly
+  // Chat endpoint — streams Cloudflare Workers AI SSE to client
   app.post("/api/chat", (req, res) => {
-    const { messages, model } = req.body;
+    const { messages } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ error: "messages array is required" });
@@ -35,24 +41,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
+    const { cfPath, apiKey } = getCFConfig();
+
     const requestBody = JSON.stringify({
-      model: model || "gpt-4o-mini",
       messages,
       stream: true,
-      temperature: 0.7,
       max_tokens: 4096,
     });
 
-    const url = new URL(AIRFORCE_API_URL);
-
     const options: https.RequestOptions = {
-      hostname: url.hostname,
+      hostname: "gateway.ai.cloudflare.com",
       port: 443,
-      path: url.pathname,
+      path: cfPath,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${AIRFORCE_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Length": Buffer.byteLength(requestBody),
       },
     };
@@ -62,19 +66,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const attemptRequest = () => {
       const apiReq = https.request(options, (apiRes) => {
-        // Handle rate limit / server errors with retry
-        if (apiRes.statusCode === 429 || (apiRes.statusCode && apiRes.statusCode >= 500)) {
-          const retryAfter = parseInt(apiRes.headers["retry-after"] as string || "0", 10);
-          const wait = retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, retryCount) * 1000;
-          apiRes.resume(); // drain body
+        if (
+          apiRes.statusCode === 429 ||
+          (apiRes.statusCode && apiRes.statusCode >= 500)
+        ) {
+          const retryAfter = parseInt(
+            (apiRes.headers["retry-after"] as string) || "0",
+            10
+          );
+          const wait =
+            retryAfter > 0
+              ? retryAfter * 1000
+              : Math.pow(2, retryCount) * 1000;
+          apiRes.resume();
 
           if (retryCount < maxRetries) {
             retryCount++;
-            console.warn(`Airforce API ${apiRes.statusCode}, retry ${retryCount}/${maxRetries} in ${wait}ms`);
+            console.warn(
+              `CF API ${apiRes.statusCode}, retry ${retryCount}/${maxRetries} in ${wait}ms`
+            );
             setTimeout(attemptRequest, wait);
           } else {
             if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ error: "AI service rate limited, please try again" })}\n\n`);
+              res.write(
+                `data: ${JSON.stringify({ error: "AI service rate limited, please try again" })}\n\n`
+              );
               res.write("data: [DONE]\n\n");
               res.end();
             }
@@ -83,6 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         let apiBuffer = "";
+        let streamDone = false;
 
         apiRes.on("data", (chunk: Buffer) => {
           apiBuffer += chunk.toString();
@@ -95,27 +112,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             const data = trimmed.slice(6);
             if (data === "[DONE]") {
-              res.write("data: [DONE]\n\n");
+              streamDone = true;
+              if (!res.writableEnded) {
+                res.write("data: [DONE]\n\n");
+                res.end();
+              }
               return;
             }
 
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content
-                ?? parsed.content
-                ?? "";
+              // Cloudflare Workers AI SSE: { response: "chunk", p: "..." }
+              // Also handle OpenAI-compatible delta format as fallback
+              const content =
+                parsed.response ??
+                parsed.choices?.[0]?.delta?.content ??
+                parsed.content ??
+                "";
 
-              // Detect rate limit in stream content — retry instead of forwarding
-              if (content && (content.includes("Ratelimit") || content.includes("ratelimit"))) {
+              if (
+                content &&
+                (content.includes("Ratelimit") ||
+                  content.includes("ratelimit"))
+              ) {
                 apiRes.destroy();
                 if (retryCount < maxRetries) {
                   retryCount++;
                   const wait = Math.pow(2, retryCount) * 1000;
-                  console.warn(`Rate limit in stream, retry ${retryCount}/${maxRetries} in ${wait}ms`);
+                  console.warn(
+                    `Rate limit in stream, retry ${retryCount}/${maxRetries} in ${wait}ms`
+                  );
                   setTimeout(attemptRequest, wait);
                 } else {
                   if (!res.writableEnded) {
-                    res.write(`data: ${JSON.stringify({ error: "AI service rate limited, please try again later" })}\n\n`);
+                    res.write(
+                      `data: ${JSON.stringify({ error: "AI service rate limited, please try again later" })}\n\n`
+                    );
                     res.write("data: [DONE]\n\n");
                     res.end();
                   }
@@ -127,22 +159,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 res.write(`data: ${JSON.stringify({ content })}\n\n`);
               }
             } catch {
-              // Skip malformed JSON
+              // Skip malformed JSON chunks
             }
           }
         });
 
         apiRes.on("end", () => {
-          if (!res.writableEnded) {
+          if (!streamDone && !res.writableEnded) {
             res.write("data: [DONE]\n\n");
             res.end();
           }
         });
 
         apiRes.on("error", (err) => {
-          console.error("Airforce API response error:", err);
+          console.error("CF API response error:", err);
           if (!res.writableEnded) {
-            res.write(`data: ${JSON.stringify({ error: "AI service error" })}\n\n`);
+            res.write(
+              `data: ${JSON.stringify({ error: "AI service error" })}\n\n`
+            );
             res.write("data: [DONE]\n\n");
             res.end();
           }
@@ -150,9 +184,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       apiReq.on("error", (err) => {
-        console.error("Airforce API request error:", err);
+        console.error("CF API request error:", err);
         if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ error: "AI service connection error" })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ error: "AI service connection error" })}\n\n`
+          );
           res.write("data: [DONE]\n\n");
           res.end();
         }
@@ -169,8 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     attemptRequest();
   });
 
-  // Agent API endpoint with SSE streaming - Full autonomous AI agent mode
-  // Ported from ai-manus PlanActFlow architecture
+  // Agent endpoint — spawns Python agent, relays SSE events to client
   app.post("/api/agent", (req, res) => {
     const { message, messages, model, attachments } = req.body;
 
@@ -185,19 +220,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
+    const { apiKey } = getCFConfig();
+
     const proc = spawn("python3", ["-m", "server.agent.agent_flow"], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: process.cwd(),
       env: {
         ...process.env,
-        AIRFORCE_API_KEY: AIRFORCE_API_KEY,
+        CF_API_KEY: apiKey,
       },
     });
 
     const input = JSON.stringify({
       message: message || "",
       messages: messages || [],
-      model: model || "gpt-4o-mini",
+      model: model || process.env.CF_MODEL || "@cf/meta/llama-3-8b-instruct",
       attachments: attachments || [],
     });
     proc.stdin.write(input);
@@ -212,19 +249,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       buffer = lines.pop() || "";
 
       for (const line of lines) {
-        if (line.trim()) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.type === "done") {
-              doneSent = true;
-              res.write("data: [DONE]\n\n");
-            } else {
-              // Forward all agent events as SSE
-              res.write(`data: ${JSON.stringify(parsed)}\n\n`);
-            }
-          } catch {
-            // Skip malformed JSON lines
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.type === "done") {
+            doneSent = true;
+            res.write("data: [DONE]\n\n");
+          } else {
+            res.write(`data: ${JSON.stringify(parsed)}\n\n`);
           }
+        } catch {
+          // Skip malformed JSON lines
         }
       }
     });
@@ -246,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("agent process error:", err);
       if (!res.writableEnded) {
         res.write(
-          `data: ${JSON.stringify({ type: "error", error: "Agent service error" })}\n\n`,
+          `data: ${JSON.stringify({ type: "error", error: "Agent service error" })}\n\n`
         );
         res.write("data: [DONE]\n\n");
         res.end();
@@ -261,6 +296,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }

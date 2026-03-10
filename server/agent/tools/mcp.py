@@ -1,6 +1,6 @@
 """
 MCP (Model Context Protocol) tools for the AI agent.
-Supports calling external MCP servers via HTTP using AIRFORCE_API_KEY for auth.
+Supports calling external MCP servers via HTTP.
 """
 import os
 import json
@@ -30,7 +30,7 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-AIRFORCE_API_KEY = os.environ.get("AIRFORCE_API_KEY", "")
+CF_API_KEY = os.environ.get("CF_API_KEY", "")
 MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "")
 
 
@@ -58,7 +58,7 @@ class MCPClientManager:
 
     def _call_http_mcp(self, server_url: str, tool_name: str,
                        arguments: Dict[str, Any]) -> ToolResult:
-        """Call an HTTP MCP server endpoint using Airforce API key as Bearer auth."""
+        """Call an HTTP MCP server endpoint using CF_API_KEY as Bearer auth."""
         body = json.dumps({
             "jsonrpc": "2.0",
             "id": 1,
@@ -72,9 +72,10 @@ class MCPClientManager:
         headers: Dict[str, str] = {
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": "DzeckAI/1.0",
         }
-        if AIRFORCE_API_KEY:
-            headers["Authorization"] = "Bearer {}".format(AIRFORCE_API_KEY)
+        if CF_API_KEY:
+            headers["Authorization"] = "Bearer {}".format(CF_API_KEY)
 
         ctx = ssl.create_default_context()
         req = urllib.request.Request(
@@ -148,8 +149,8 @@ class MCPClientManager:
             "method": "tools/list", "params": {},
         }).encode("utf-8")
         headers: Dict[str, str] = {"Content-Type": "application/json"}
-        if AIRFORCE_API_KEY:
-            headers["Authorization"] = "Bearer {}".format(AIRFORCE_API_KEY)
+        if CF_API_KEY:
+            headers["Authorization"] = "Bearer {}".format(CF_API_KEY)
 
         ctx = ssl.create_default_context()
         req = urllib.request.Request(
@@ -180,7 +181,7 @@ _mcp_manager = MCPClientManager()
 
 
 def mcp_call_tool(tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> ToolResult:
-    """Call an MCP tool by name. Uses AIRFORCE_API_KEY for Bearer auth."""
+    """Call an MCP tool by name. Uses CF_API_KEY for Bearer auth."""
     return _mcp_manager.call_tool(tool_name, arguments or {})
 
 

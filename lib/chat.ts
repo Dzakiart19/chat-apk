@@ -1,7 +1,7 @@
 import { fetch } from "expo/fetch";
 
 /**
- * Stream chat responses from the airforce API via SSE.
+ * Stream chat responses from Cloudflare Workers AI via SSE.
  * Yields text chunks as they arrive.
  */
 export async function* streamChat(
@@ -12,7 +12,7 @@ export async function* streamChat(
   const response = await fetch(`${apiUrl}api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, model: "gpt-4o-mini" }),
+    body: JSON.stringify({ messages }),
     signal,
   });
 
@@ -153,7 +153,6 @@ export async function* streamAgent(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
-      model: "gpt-4o-mini",
       attachments: [],
     }),
     signal,
@@ -217,3 +216,7 @@ export interface ChatAttachment {
   type: "image";
   name?: string;
 }
+
+export type ChatListItem =
+  | { kind: "chat"; data: ChatMessage }
+  | { kind: "agent"; data: AgentEvent; id: string };

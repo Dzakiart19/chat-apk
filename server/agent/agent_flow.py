@@ -3,14 +3,8 @@
 Dzeck AI Agent - Plan-Act Flow Engine
 Ported from ai-manus PlanActFlow architecture.
 
-This is the core autonomous agent implementing:
-1. Plan-Act state machine (IDLE -> PLANNING -> EXECUTING -> UPDATING -> SUMMARIZING -> DONE)
-2. Robust JSON parsing with 5-stage repair pipeline (anti-hallucination)
-3. Memory management with compaction
-4. Full tool system matching ai-manus (shell, file, search, browser, message, mcp)
-5. Event streaming via JSON lines to stdout for SSE relay
-
-Uses airforce API (OpenAI-compatible) for all LLM calls.
+Uses Cloudflare Workers AI (via AI Gateway) for all LLM calls.
+Supports native tool calling with real execution — no simulation.
 """
 import os
 import re
@@ -25,7 +19,7 @@ from typing import Optional, Dict, Any, List
 
 
 def _load_dotenv() -> None:
-    """Load .env file into os.environ if it exists (for local/APK builds)."""
+    """Load .env file into os.environ (for local/APK builds)."""
     env_path = os.path.join(os.getcwd(), ".env")
     if not os.path.exists(env_path):
         return
@@ -87,7 +81,6 @@ from server.agent.prompts.execution import (
 
 
 class FlowState(str, Enum):
-    """State machine states matching ai-manus PlanActFlow."""
     IDLE = "idle"
     PLANNING = "planning"
     EXECUTING = "executing"
@@ -98,24 +91,20 @@ class FlowState(str, Enum):
     FAILED = "failed"
 
 
-# Tool registry - full Dzeck agent tool set
+# Tool registry
 TOOLS: Dict[str, Any] = {
-    # Messaging
     "message_notify_user": message_notify_user,
     "message_ask_user": message_ask_user,
-    # Shell
     "shell_exec": shell_exec,
     "shell_view": shell_view,
     "shell_wait": shell_wait,
     "shell_write_to_process": shell_write_to_process,
     "shell_kill_process": shell_kill_process,
-    # File
     "file_read": file_read,
     "file_write": file_write,
     "file_str_replace": file_str_replace,
     "file_find_by_name": file_find_by_name,
     "file_find_in_content": file_find_in_content,
-    # Browser
     "browser_navigate": browser_navigate,
     "browser_view": browser_view,
     "browser_click": browser_click,
@@ -126,15 +115,12 @@ TOOLS: Dict[str, Any] = {
     "browser_console_view": browser_console_view,
     "browser_restart": browser_restart,
     "browser_save_image": browser_save_image,
-    # Search / Web
     "web_search": web_search,
     "web_browse": web_browse,
-    # MCP
     "mcp_call_tool": mcp_call_tool,
     "mcp_list_tools": mcp_list_tools,
 }
 
-# Backward compatibility aliases
 TOOL_ALIASES: Dict[str, str] = {
     "message_notify": "message_notify_user",
     "message_ask": "message_ask_user",
@@ -144,82 +130,331 @@ TOOL_ALIASES: Dict[str, str] = {
     "search": "web_search",
 }
 
-# Toolkit type mapping (function_name -> toolkit name) matching ai-manus
-# In ai-manus, each tool belongs to a toolkit with a name like "shell", "browser", etc.
-# The ToolEvent uses tool_name for the toolkit name and function_name for the specific function.
 TOOLKIT_MAP: Dict[str, str] = {
-    # Shell toolkit
-    "shell_exec": "shell",
-    "shell_view": "shell",
-    "shell_wait": "shell",
-    "shell_write_to_process": "shell",
-    "shell_kill_process": "shell",
-    # File toolkit
-    "file_read": "file",
-    "file_write": "file",
-    "file_str_replace": "file",
-    "file_find_by_name": "file",
-    "file_find_in_content": "file",
-    # Browser toolkit
-    "browser_navigate": "browser",
-    "browser_view": "browser",
-    "browser_click": "browser",
-    "browser_type": "browser",
-    "browser_scroll": "browser",
-    "browser_scroll_to_bottom": "browser",
-    "browser_read_links": "browser",
-    "browser_console_view": "browser",
-    "browser_restart": "browser",
-    "browser_save_image": "browser",
-    # Search toolkit
-    "web_search": "search",
-    "web_browse": "browser",
-    # Message toolkit
-    "message_notify_user": "message",
-    "message_ask_user": "message",
-    # MCP toolkit
-    "mcp_call_tool": "mcp",
-    "mcp_list_tools": "mcp",
+    "shell_exec": "shell", "shell_view": "shell", "shell_wait": "shell",
+    "shell_write_to_process": "shell", "shell_kill_process": "shell",
+    "file_read": "file", "file_write": "file", "file_str_replace": "file",
+    "file_find_by_name": "file", "file_find_in_content": "file",
+    "browser_navigate": "browser", "browser_view": "browser",
+    "browser_click": "browser", "browser_type": "browser",
+    "browser_scroll": "browser", "browser_scroll_to_bottom": "browser",
+    "browser_read_links": "browser", "browser_console_view": "browser",
+    "browser_restart": "browser", "browser_save_image": "browser",
+    "web_search": "search", "web_browse": "browser",
+    "message_notify_user": "message", "message_ask_user": "message",
+    "mcp_call_tool": "mcp", "mcp_list_tools": "mcp",
 }
 
-# -- Airforce API Configuration --
-AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
-AIRFORCE_API_KEY = os.environ.get("AIRFORCE_API_KEY", "")
-DEFAULT_MODEL = "gpt-4o-mini"
 
-if not AIRFORCE_API_KEY:
-    sys.stderr.write("[agent] WARNING: AIRFORCE_API_KEY is not set!\n")
+def _get_cf_url() -> str:
+    """Build Cloudflare AI Gateway URL from env vars."""
+    account_id = os.environ.get("CF_ACCOUNT_ID", "")
+    gateway_name = os.environ.get("CF_GATEWAY_NAME", "")
+    model = os.environ.get("CF_MODEL", "@cf/meta/llama-3-8b-instruct")
+    return (
+        "https://gateway.ai.cloudflare.com/v1/"
+        "{}/{}/workers-ai/run/{}".format(account_id, gateway_name, model)
+    )
+
+
+CF_API_KEY = os.environ.get("CF_API_KEY", "")
+
+if not CF_API_KEY:
+    sys.stderr.write("[agent] WARNING: CF_API_KEY is not set!\n")
     sys.stderr.flush()
 
-# -- OpenAI Function Calling Tool Schemas --
+
+# -- Cloudflare Workers AI Tool Schemas --
+# Format: {name, description, parameters} — no OpenAI "type: function" wrapper
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
-    {"type": "function", "function": {"name": "task_complete", "description": "Signal that the current task step is complete.", "parameters": {"type": "object", "properties": {"success": {"type": "boolean", "description": "Whether the step succeeded"}, "result": {"type": "string", "description": "Summary of what was accomplished"}}, "required": ["success", "result"]}}},
-    {"type": "function", "function": {"name": "message_notify_user", "description": "Send a progress update or result to the user (non-blocking)", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "Message text"}, "attachments": {"type": "array", "items": {"type": "string"}, "description": "File paths to attach"}}, "required": ["text"]}}},
-    {"type": "function", "function": {"name": "message_ask_user", "description": "Ask the user a question and wait for response (blocking)", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "Question to ask"}, "attachments": {"type": "array", "items": {"type": "string"}}}, "required": ["text"]}}},
-    {"type": "function", "function": {"name": "shell_exec", "description": "Execute a shell command. Use -y/-f flags to avoid prompts.", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command"}, "exec_dir": {"type": "string", "description": "Working directory"}, "id": {"type": "string", "description": "Shell session ID"}}, "required": ["command"]}}},
-    {"type": "function", "function": {"name": "shell_view", "description": "View current output of a running shell session", "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}},
-    {"type": "function", "function": {"name": "shell_wait", "description": "Wait for a running process to complete", "parameters": {"type": "object", "properties": {"id": {"type": "string"}, "seconds": {"type": "integer"}}, "required": ["id"]}}},
-    {"type": "function", "function": {"name": "shell_write_to_process", "description": "Write input to a running process", "parameters": {"type": "object", "properties": {"id": {"type": "string"}, "input": {"type": "string"}, "press_enter": {"type": "boolean"}}, "required": ["id", "input", "press_enter"]}}},
-    {"type": "function", "function": {"name": "shell_kill_process", "description": "Kill a running process", "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}},
-    {"type": "function", "function": {"name": "file_read", "description": "Read content from a text file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}}, "required": ["file"]}}},
-    {"type": "function", "function": {"name": "file_write", "description": "Write content to a file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "content": {"type": "string"}, "append": {"type": "boolean"}, "leading_newline": {"type": "boolean"}, "trailing_newline": {"type": "boolean"}}, "required": ["file", "content"]}}},
-    {"type": "function", "function": {"name": "file_str_replace", "description": "Replace a specific string in a file (exact match)", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "old_str": {"type": "string"}, "new_str": {"type": "string"}}, "required": ["file", "old_str", "new_str"]}}},
-    {"type": "function", "function": {"name": "file_find_by_name", "description": "Find files by name/glob pattern", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "glob": {"type": "string"}}, "required": ["path", "glob"]}}},
-    {"type": "function", "function": {"name": "file_find_in_content", "description": "Search for regex patterns in a file", "parameters": {"type": "object", "properties": {"file": {"type": "string"}, "regex": {"type": "string"}}, "required": ["file", "regex"]}}},
-    {"type": "function", "function": {"name": "browser_navigate", "description": "Navigate to a URL", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
-    {"type": "function", "function": {"name": "browser_view", "description": "Get current page content", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "browser_click", "description": "Click at (x,y) coordinates", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "button": {"type": "string"}}, "required": ["coordinate_x", "coordinate_y"]}}},
-    {"type": "function", "function": {"name": "browser_type", "description": "Type text into focused element", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}},
-    {"type": "function", "function": {"name": "browser_scroll", "description": "Scroll the page", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "direction": {"type": "string"}, "amount": {"type": "integer"}}, "required": ["coordinate_x", "coordinate_y", "direction", "amount"]}}},
-    {"type": "function", "function": {"name": "browser_scroll_to_bottom", "description": "Scroll to bottom", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}}}}},
-    {"type": "function", "function": {"name": "browser_read_links", "description": "Get all links from page", "parameters": {"type": "object", "properties": {"max_links": {"type": "integer"}}}}},
-    {"type": "function", "function": {"name": "browser_console_view", "description": "View browser console logs", "parameters": {"type": "object", "properties": {"max_lines": {"type": "integer"}}}}},
-    {"type": "function", "function": {"name": "browser_restart", "description": "Restart browser session", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "browser_save_image", "description": "Save an image from page", "parameters": {"type": "object", "properties": {"coordinate_x": {"type": "integer"}, "coordinate_y": {"type": "integer"}, "save_dir": {"type": "string"}, "base_name": {"type": "string"}}, "required": ["coordinate_x", "coordinate_y", "save_dir", "base_name"]}}},
-    {"type": "function", "function": {"name": "web_search", "description": "Search the web (DuckDuckGo)", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "num_results": {"type": "integer"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "web_browse", "description": "Browse and extract text from a URL", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
-    {"type": "function", "function": {"name": "mcp_call_tool", "description": "Call an MCP tool", "parameters": {"type": "object", "properties": {"tool_name": {"type": "string"}, "arguments": {"type": "object"}}, "required": ["tool_name"]}}},
-    {"type": "function", "function": {"name": "mcp_list_tools", "description": "List available MCP tools", "parameters": {"type": "object", "properties": {}}}},
+    {
+        "name": "task_complete",
+        "description": "Signal that the current task step is complete.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "success": {"type": "boolean", "description": "Whether the step succeeded"},
+                "result": {"type": "string", "description": "Summary of what was accomplished"},
+            },
+            "required": ["success", "result"],
+        },
+    },
+    {
+        "name": "message_notify_user",
+        "description": "Send a progress update or result to the user (non-blocking).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Message text"},
+                "attachments": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "message_ask_user",
+        "description": "Ask the user a question and wait for response (blocking).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Question to ask"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "shell_exec",
+        "description": "Execute a shell command. Use -y/-f flags to avoid prompts.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Shell command to run"},
+                "exec_dir": {"type": "string", "description": "Working directory"},
+                "id": {"type": "string", "description": "Shell session ID"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "shell_view",
+        "description": "View current output of a running shell session.",
+        "parameters": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "shell_wait",
+        "description": "Wait for a running process to complete.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "seconds": {"type": "integer"},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "shell_write_to_process",
+        "description": "Write input to a running process.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "input": {"type": "string"},
+                "press_enter": {"type": "boolean"},
+            },
+            "required": ["id", "input", "press_enter"],
+        },
+    },
+    {
+        "name": "shell_kill_process",
+        "description": "Kill a running process.",
+        "parameters": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "file_read",
+        "description": "Read content from a text file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "string"},
+                "start_line": {"type": "integer"},
+                "end_line": {"type": "integer"},
+            },
+            "required": ["file"],
+        },
+    },
+    {
+        "name": "file_write",
+        "description": "Write content to a file (creates or overwrites).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "string"},
+                "content": {"type": "string"},
+                "append": {"type": "boolean"},
+            },
+            "required": ["file", "content"],
+        },
+    },
+    {
+        "name": "file_str_replace",
+        "description": "Replace a specific string in a file (exact match).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "string"},
+                "old_str": {"type": "string"},
+                "new_str": {"type": "string"},
+            },
+            "required": ["file", "old_str", "new_str"],
+        },
+    },
+    {
+        "name": "file_find_by_name",
+        "description": "Find files by name/glob pattern in a directory.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "glob": {"type": "string"},
+            },
+            "required": ["path", "glob"],
+        },
+    },
+    {
+        "name": "file_find_in_content",
+        "description": "Search for regex patterns inside a file's content.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file": {"type": "string"},
+                "regex": {"type": "string"},
+            },
+            "required": ["file", "regex"],
+        },
+    },
+    {
+        "name": "browser_navigate",
+        "description": "Navigate browser to a URL and load the page.",
+        "parameters": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "browser_view",
+        "description": "Get the current page content as text.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "browser_click",
+        "description": "Click at (x, y) coordinates on the current page.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "coordinate_x": {"type": "integer"},
+                "coordinate_y": {"type": "integer"},
+                "button": {"type": "string"},
+            },
+            "required": ["coordinate_x", "coordinate_y"],
+        },
+    },
+    {
+        "name": "browser_type",
+        "description": "Type text into the currently focused element.",
+        "parameters": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "browser_scroll",
+        "description": "Scroll the page in a direction.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "coordinate_x": {"type": "integer"},
+                "coordinate_y": {"type": "integer"},
+                "direction": {"type": "string"},
+                "amount": {"type": "integer"},
+            },
+            "required": ["coordinate_x", "coordinate_y", "direction", "amount"],
+        },
+    },
+    {
+        "name": "browser_scroll_to_bottom",
+        "description": "Scroll the page to the bottom.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "coordinate_x": {"type": "integer"},
+                "coordinate_y": {"type": "integer"},
+            },
+        },
+    },
+    {
+        "name": "browser_read_links",
+        "description": "Get all hyperlinks from the current page.",
+        "parameters": {
+            "type": "object",
+            "properties": {"max_links": {"type": "integer"}},
+        },
+    },
+    {
+        "name": "browser_console_view",
+        "description": "View browser console logs from the current page.",
+        "parameters": {
+            "type": "object",
+            "properties": {"max_lines": {"type": "integer"}},
+        },
+    },
+    {
+        "name": "browser_restart",
+        "description": "Restart the browser session.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "browser_save_image",
+        "description": "Save an image from the current page by coordinates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "coordinate_x": {"type": "integer"},
+                "coordinate_y": {"type": "integer"},
+                "save_dir": {"type": "string"},
+                "base_name": {"type": "string"},
+            },
+            "required": ["coordinate_x", "coordinate_y", "save_dir", "base_name"],
+        },
+    },
+    {
+        "name": "web_search",
+        "description": "Search the web using DuckDuckGo and return results.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "web_browse",
+        "description": "Fetch and extract readable text from a URL.",
+        "parameters": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "mcp_call_tool",
+        "description": "Call an external MCP tool by name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tool_name": {"type": "string"},
+                "arguments": {"type": "object"},
+            },
+            "required": ["tool_name"],
+        },
+    },
+    {
+        "name": "mcp_list_tools",
+        "description": "List all available MCP tools.",
+        "parameters": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -230,32 +465,32 @@ def emit_event(event_type: str, **data: Any) -> None:
     sys.stdout.flush()
 
 
-def call_airforce_api(
+def call_cf_api(
     messages: list,
-    model: str = DEFAULT_MODEL,
     tools: Optional[List[Dict[str, Any]]] = None,
-    response_format: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Call the airforce API (OpenAI-compatible). Returns full response dict."""
+    """Call Cloudflare Workers AI. Returns full response dict.
+
+    Response format:
+      {"result": {"response": "...", "tool_calls": [...] or null}, "success": true}
+    """
+    url = _get_cf_url()
     body: Dict[str, Any] = {
-        "model": model,
         "messages": messages,
-        "temperature": 0.7,
         "max_tokens": 4096,
+        "stream": False,
     }
     if tools:
         body["tools"] = tools
-        body["tool_choice"] = "auto"
-    if response_format == "json_object":
-        body["response_format"] = {"type": "json_object"}
 
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
-        AIRFORCE_API_URL,
+        url,
         data=data,
         headers={
             "Content-Type": "application/json",
-            "Authorization": "Bearer {}".format(AIRFORCE_API_KEY),
+            "Authorization": "Bearer {}".format(CF_API_KEY),
+            "User-Agent": "DzeckAI/1.0",
         },
         method="POST",
     )
@@ -263,51 +498,50 @@ def call_airforce_api(
     with urllib.request.urlopen(req, timeout=120) as resp:
         raw = resp.read().decode("utf-8")
 
-    # Detect plain-text rate limit responses (API returns HTTP 200 with body text)
-    if raw.lstrip().startswith("Ratelimit") or "Ratelimit Exceeded" in raw:
+    result = json.loads(raw)
+
+    # Raise on Cloudflare-level errors (wrapped gateway format only)
+    if "success" in result and not result["success"]:
+        errors = result.get("errors", [])
         raise urllib.error.HTTPError(
-            AIRFORCE_API_URL, 429, "Rate limit exceeded", {}, None)
+            url, 500, "CF API error: {}".format(errors), {}, None)
 
-    return json.loads(raw)
+    return result
 
 
-def call_airforce_text(
-    messages: list,
-    model: str = DEFAULT_MODEL,
-    response_format: Optional[str] = None,
-) -> str:
-    """Convenience wrapper that returns only the text content."""
-    result = call_airforce_api(messages, model,
-                               response_format=response_format)
-    if "choices" in result and result["choices"]:
-        content = result["choices"][0]["message"].get("content") or ""
-        # Guard: treat inline rate limit text as an error so retry kicks in
-        if "Ratelimit Exceeded" in content or content.startswith("Ratelimit"):
-            raise urllib.error.HTTPError(
-                AIRFORCE_API_URL, 429, "Rate limit exceeded", {}, None)
-        return content
-    return ""
+def call_cf_text(messages: list) -> str:
+    """Convenience wrapper: returns only the text response string.
+
+    Handles both response formats:
+    - Direct Workers AI: {"response": "...", "usage": {...}}
+    - Wrapped Gateway:   {"result": {"response": "..."}, "success": true}
+    """
+    result = call_cf_api(messages)
+    # Use "result" sub-dict if present, else use top-level directly
+    cf_result = result.get("result", result)
+    text = cf_result.get("response") or ""
+    # Fallback: OpenAI-compatible format
+    if not text:
+        choices = result.get("choices", [])
+        if choices:
+            text = choices[0].get("message", {}).get("content", "") or ""
+    return text
 
 
 def call_text_with_retry(
     messages: list,
-    model: str = DEFAULT_MODEL,
     max_retries: int = 5,
-    response_format: Optional[str] = None,
 ) -> str:
-    """Call airforce text API with exponential backoff retry.
-
-    Specifically handles HTTP 429 (rate limit) and 5xx server errors.
-    """
+    """Call CF text API with exponential backoff retry."""
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            return call_airforce_text(messages, model, response_format)
+            return call_cf_text(messages)
         except urllib.error.HTTPError as e:
             last_error = e
             if e.code == 429 or e.code >= 500:
                 wait = 2 ** attempt
-                emit_event("thinking", content="[Rate limited, retrying in {}s...]".format(wait))
+                emit_event("thinking", content="Retrying in {}s...".format(wait))
                 time.sleep(wait)
             else:
                 raise
@@ -322,23 +556,19 @@ def call_text_with_retry(
 
 def call_api_with_retry(
     messages: list,
-    model: str = DEFAULT_MODEL,
     tools: Optional[List[Dict[str, Any]]] = None,
     max_retries: int = 5,
 ) -> Dict[str, Any]:
-    """Call airforce API (full response) with exponential backoff retry.
-
-    Specifically handles HTTP 429 (rate limit) and 5xx server errors.
-    """
+    """Call CF API (full response) with exponential backoff retry."""
     last_error: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
-            return call_airforce_api(messages, model, tools=tools)
+            return call_cf_api(messages, tools=tools)
         except urllib.error.HTTPError as e:
             last_error = e
             if e.code == 429 or e.code >= 500:
                 wait = 2 ** attempt
-                emit_event("thinking", content="[Rate limited, retrying in {}s...]".format(wait))
+                emit_event("thinking", content="Retrying in {}s...".format(wait))
                 time.sleep(wait)
             else:
                 raise
@@ -352,7 +582,6 @@ def call_api_with_retry(
 
 
 def resolve_tool_name(name: str) -> Optional[str]:
-    """Resolve a tool name, handling aliases."""
     if name in TOOLS:
         return name
     if name in TOOL_ALIASES:
@@ -361,7 +590,6 @@ def resolve_tool_name(name: str) -> Optional[str]:
 
 
 def get_toolkit_name(function_name: str) -> str:
-    """Get the toolkit name for a function (matching ai-manus toolkit naming)."""
     return TOOLKIT_MAP.get(function_name, "unknown")
 
 
@@ -371,8 +599,8 @@ def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> ToolResult:
     if resolved is None:
         return ToolResult(
             success=False,
-            message=("Unknown tool '{}'. Available: {}"
-                     .format(tool_name, ", ".join(TOOLS.keys()))),
+            message="Unknown tool '{}'. Available: {}".format(
+                tool_name, ", ".join(TOOLS.keys())),
         )
 
     tool_fn = TOOLS[resolved]
@@ -402,12 +630,11 @@ def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> ToolResult:
 def build_tool_content(
     tool_name: str, tool_result: ToolResult
 ) -> Optional[Dict[str, Any]]:
-    """Build tool-specific content for frontend display."""
+    """Build tool-specific content dict for frontend display."""
     data = tool_result.data or {}
 
-    # Shell tools
     if tool_name in ("shell_exec", "shell_view", "shell_wait",
-                      "shell_write_to_process", "shell_kill_process"):
+                     "shell_write_to_process", "shell_kill_process"):
         console = data.get("stdout", "") or data.get("output", "")
         if data.get("stderr"):
             console += "\n" + data["stderr"]
@@ -419,7 +646,6 @@ def build_tool_content(
             "id": data.get("id", ""),
         }
 
-    # Search
     elif tool_name == "web_search":
         return {
             "type": "search",
@@ -427,12 +653,11 @@ def build_tool_content(
             "results": data.get("results", []),
         }
 
-    # Browser tools
     elif tool_name in ("web_browse", "browser_navigate", "browser_view",
-                        "browser_click", "browser_type", "browser_scroll",
-                        "browser_scroll_to_bottom", "browser_read_links",
-                        "browser_console_view", "browser_save_image",
-                        "browser_restart"):
+                       "browser_click", "browser_type", "browser_scroll",
+                       "browser_scroll_to_bottom", "browser_read_links",
+                       "browser_console_view", "browser_save_image",
+                       "browser_restart"):
         return {
             "type": "browser",
             "url": data.get("url", ""),
@@ -442,9 +667,8 @@ def build_tool_content(
             "save_path": data.get("save_path", ""),
         }
 
-    # File tools
     elif tool_name in ("file_read", "file_write", "file_str_replace",
-                        "file_find_by_name", "file_find_in_content"):
+                       "file_find_by_name", "file_find_in_content"):
         return {
             "type": "file",
             "file": data.get("file", data.get("path", "")),
@@ -452,7 +676,6 @@ def build_tool_content(
             "operation": tool_name.replace("file_", ""),
         }
 
-    # MCP tools
     elif tool_name in ("mcp_call_tool", "mcp_list_tools"):
         return {
             "type": "mcp",
@@ -464,20 +687,58 @@ def build_tool_content(
 
 
 def safe_plan_dict(plan: Plan) -> Dict[str, Any]:
-    """Return plan dict with goal stripped to prevent leaking."""
     d = plan.to_dict()
     d.pop("goal", None)
     return d
 
 
+def _extract_cf_response(api_result: Dict[str, Any]) -> tuple:
+    """Extract (text, tool_calls) from a Cloudflare Workers AI response.
+
+    Handles both formats:
+    - Direct Workers AI: {"response": "...", "tool_calls": [...], "usage": {...}}
+    - Wrapped Gateway:   {"result": {"response": "...", "tool_calls": [...]}, "success": true}
+
+    Returns:
+        (text: str, tool_calls: list[dict] | None)
+        tool_calls items: {"name": "...", "arguments": {...}}
+    """
+    # Use "result" sub-dict if present, else use top-level directly
+    cf_result = api_result.get("result", api_result)
+    text = cf_result.get("response") or ""
+    tool_calls = cf_result.get("tool_calls")  # list or None
+
+    # Fallback: OpenAI-compatible format
+    if not text and not tool_calls:
+        choices = api_result.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            text = msg.get("content", "") or ""
+            oa_calls = msg.get("tool_calls")
+            if oa_calls:
+                # Convert OpenAI format → Cloudflare format
+                tool_calls = []
+                for tc in oa_calls:
+                    fn = tc.get("function", {})
+                    try:
+                        args = json.loads(fn.get("arguments", "{}"))
+                    except Exception:
+                        args = {}
+                    tool_calls.append({
+                        "name": fn.get("name", ""),
+                        "arguments": args,
+                    })
+
+    return text, tool_calls
+
+
 class DzeckAgent:
     """
     Main agent class implementing the Plan-Act flow.
-    Uses OpenAI function calling for smart tool execution (ai-manus style).
+    Uses Cloudflare Workers AI with native tool calling.
     """
 
-    def __init__(self, model: str = DEFAULT_MODEL):
-        self.model = model
+    def __init__(self) -> None:
         self.memory = Memory()
         self.max_tool_iterations = 20
         self.plan: Optional[Plan] = None
@@ -485,19 +746,13 @@ class DzeckAgent:
         self.parser = RobustJsonParser()
 
     def _parse_response(self, text: str) -> Dict[str, Any]:
-        """Parse LLM response using robust 5-stage JSON parser.
-
-        Key anti-hallucination mechanism from ai-manus.
-        """
+        """Parse LLM response using robust 5-stage JSON parser."""
         result, error = self.parser.parse(text)
         if result is not None:
             return result
-        emit_event("error", error="JSON parse failed: {}".format(error),
-                   details=text[:200])
         return {}
 
     def _detect_language(self, text: str) -> str:
-        """Simple language detection from text."""
         id_words = [
             "saya", "anda", "untuk", "yang", "dengan", "dari", "ini",
             "itu", "bisa", "akan", "sudah", "tidak", "ada", "juga",
@@ -510,8 +765,7 @@ class DzeckAgent:
             return "id"
         if any("\u4e00" <= c <= "\u9fff" for c in text):
             return "zh"
-        if any("\u3040" <= c <= "\u309f" or "\u30a0" <= c <= "\u30ff"
-               for c in text):
+        if any("\u3040" <= c <= "\u309f" or "\u30a0" <= c <= "\u30ff" for c in text):
             return "ja"
         if any("\uac00" <= c <= "\ud7af" for c in text):
             return "ko"
@@ -519,20 +773,15 @@ class DzeckAgent:
 
     def run_planner(self, user_message: str,
                     attachments: Optional[List[str]] = None) -> Plan:
-        """Create a plan from the user's message.
-
-        Uses PLANNER_SYSTEM_PROMPT + CREATE_PLAN_PROMPT from ai-manus.
-        """
+        """Create a plan from the user's message."""
         self.state = FlowState.PLANNING
-        emit_event("thinking",
-                   content="Analyzing your request and creating a plan...")
+        emit_event("thinking", content="Analyzing your request...")
 
         language = self._detect_language(user_message)
 
         attachments_info = ""
         if attachments:
-            attachments_info = "Attachments: {}".format(
-                ", ".join(attachments))
+            attachments_info = "Attachments: {}".format(", ".join(attachments))
 
         prompt = CREATE_PLAN_PROMPT.format(
             message=user_message,
@@ -540,14 +789,17 @@ class DzeckAgent:
             attachments_info=attachments_info,
         )
 
+        # Instruct model to respond with JSON (CF doesn't support response_format)
+        json_instruction = (
+            "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown, no explanation."
+        )
+
         messages = [
-            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT + json_instruction},
             {"role": "user", "content": prompt},
         ]
 
-        response_text = call_text_with_retry(
-            messages, self.model, response_format="json_object"
-        )
+        response_text = call_text_with_retry(messages)
         parsed = self._parse_response(response_text)
 
         if not parsed:
@@ -585,11 +837,10 @@ class DzeckAgent:
         step: Step,
         iteration: int,
     ) -> Optional[str]:
-        """Execute a single function-call tool and return the result string.
+        """Execute a single tool call and return the result string.
 
         Returns "STEP_DONE" for task_complete. Otherwise returns result text.
         """
-        # task_complete pseudo-tool
         if fn_name == "task_complete":
             step.status = ExecutionStatus.COMPLETED
             step.success = fn_args.get("success", True)
@@ -598,19 +849,18 @@ class DzeckAgent:
                 step.status = ExecutionStatus.FAILED
             status_enum = (StepStatus.COMPLETED if step.success
                            else StepStatus.FAILED)
-            emit_event("step", status=status_enum.value,
-                       step=step.to_dict())
+            emit_event("step", status=status_enum.value, step=step.to_dict())
             if step.result:
-                emit_event("message", message=step.result,
-                           role="assistant")
+                emit_event("message", message=step.result, role="assistant")
             return "STEP_DONE"
 
         resolved = resolve_tool_name(fn_name)
         if resolved is None:
-            return ("Unknown tool '{}'. Available: {}"
-                    .format(fn_name, ", ".join(TOOLS.keys())))
+            return "Unknown tool '{}'. Available: {}".format(
+                fn_name, ", ".join(TOOLS.keys()))
 
         toolkit_name = get_toolkit_name(resolved)
+
         emit_event(
             "tool",
             status=ToolStatus.CALLING.value,
@@ -624,19 +874,16 @@ class DzeckAgent:
         tool_content = build_tool_content(resolved, tool_result)
 
         if resolved == "message_notify_user":
-            emit_event("message",
-                       message=fn_args.get("text", ""),
-                       role="assistant")
+            emit_event("message", message=fn_args.get("text", ""), role="assistant")
         elif resolved == "message_ask_user":
             emit_event("wait", prompt=fn_args.get("text", ""))
-            emit_event("message",
-                       message=fn_args.get("text", ""),
-                       role="assistant")
+            emit_event("message", message=fn_args.get("text", ""), role="assistant")
 
         result_status = (ToolStatus.CALLED if tool_result.success
                          else ToolStatus.ERROR)
         fn_result = (str(tool_result.message)[:3000]
                      if tool_result.message else "")
+
         emit_event(
             "tool",
             status=result_status.value,
@@ -648,37 +895,26 @@ class DzeckAgent:
             tool_content=tool_content,
         )
 
-        self.memory.add_message({
-            "role": "tool",
-            "tool_name": resolved,
-            "content": tool_result.message or "",
-        })
-
         result_summary = tool_result.message or "No result"
         if len(result_summary) > 4000:
             result_summary = result_summary[:4000] + "...[truncated]"
         return result_summary
 
-    def execute_step(self, plan: Plan, step: Step,
-                     user_message: str) -> None:
-        """Execute a single step using tools iteratively.
+    def execute_step(self, plan: Plan, step: Step, user_message: str) -> None:
+        """Execute a single step using Cloudflare Workers AI tool calling.
 
-        Uses OpenAI function calling (ai-manus style). The model decides
-        whether to call tools or not. Falls back to JSON parsing when
-        the model responds with plain text.
+        Agentic loop: call LLM → if tool_calls → execute → add result → loop.
+        Real tool execution, no simulation.
         """
         self.state = FlowState.EXECUTING
         step.status = ExecutionStatus.RUNNING
-        emit_event("step", status=StepStatus.RUNNING.value,
-                   step=step.to_dict())
+        emit_event("step", status=StepStatus.RUNNING.value, step=step.to_dict())
 
         context_parts: List[str] = []
         for s in plan.steps:
             if s.is_done() and s.result:
-                context_parts.append("- {}: {}".format(
-                    s.description, s.result))
-        context = ("\n".join(context_parts)
-                   if context_parts else "No previous context.")
+                context_parts.append("- {}: {}".format(s.description, s.result))
+        context = ("\n".join(context_parts) if context_parts else "No previous context.")
 
         prompt = EXECUTION_PROMPT.format(
             step=step.description,
@@ -693,67 +929,48 @@ class DzeckAgent:
             {"role": "user", "content": prompt},
         ]
 
-        self.memory.add_message(
-            {"role": "system",
-             "content": "Executing step: {}".format(step.description)}
-        )
-
         for iteration in range(self.max_tool_iterations):
             try:
-                # Call API with tools for native function calling
                 api_result = call_api_with_retry(
-                    exec_messages, self.model, tools=TOOL_SCHEMAS)
+                    exec_messages, tools=TOOL_SCHEMAS)
 
-                if ("choices" not in api_result
-                        or not api_result["choices"]):
-                    step.status = ExecutionStatus.FAILED
-                    step.result = "Empty LLM response"
-                    emit_event("step", status=StepStatus.FAILED.value,
-                               step=step.to_dict())
-                    return
+                text, tool_calls = _extract_cf_response(api_result)
 
-                choice = api_result["choices"][0]
-                message = choice.get("message", {})
-                content = message.get("content") or ""
-                tool_calls = message.get("tool_calls")
-
-                # -- Native function calling path --
+                # -- Native tool calling path --
                 if tool_calls:
-                    assistant_msg: Dict[str, Any] = {
-                        "role": "assistant",
-                        "content": content if content else None,
-                    }
-                    assistant_msg["tool_calls"] = tool_calls
-                    exec_messages.append(assistant_msg)
-
                     step_done = False
                     for tc in tool_calls:
-                        fn_name = tc["function"]["name"]
-                        try:
-                            fn_args = json.loads(
-                                tc["function"]["arguments"])
-                        except (json.JSONDecodeError, KeyError):
-                            fn_args = {}
+                        fn_name = tc.get("name", "")
+                        fn_args = tc.get("arguments", {})
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except Exception:
+                                fn_args = {}
 
-                        tc_id = tc.get("id", "tc_{}_{}".format(
-                            step.id, iteration))
+                        tc_id = "tc_{}_{}".format(step.id, iteration)
+
+                        # Add assistant turn (shows which tool was called)
+                        exec_messages.append({
+                            "role": "assistant",
+                            "content": "[Calling tool: {}]".format(fn_name),
+                        })
 
                         result_str = self._handle_tool_call(
                             fn_name, fn_args, tc_id, step, iteration)
 
                         if result_str == "STEP_DONE":
                             step_done = True
-                            exec_messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc_id,
-                                "content": "Step marked complete.",
-                            })
                             break
 
+                        # Add tool result back for next iteration
                         exec_messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "content": result_str or "Done",
+                            "role": "user",
+                            "content": (
+                                "Tool '{}' result:\n{}\n\n"
+                                "Continue executing the step. "
+                                "Call task_complete when done."
+                            ).format(fn_name, result_str or "Done"),
                         })
 
                     if step_done:
@@ -763,39 +980,36 @@ class DzeckAgent:
                         self.memory.compact()
                     continue
 
-                # -- Fallback: plain text response (no tool_calls) --
-                if content:
-                    parsed = self._parse_response(content)
+                # -- Plain text response (no tool calls) --
+                if text:
+                    parsed = self._parse_response(text)
 
                     if parsed.get("done"):
                         step.status = ExecutionStatus.COMPLETED
                         step.success = parsed.get("success", True)
-                        step.result = parsed.get(
-                            "result", "Step completed")
-                        step.attachments = parsed.get(
-                            "attachments", [])
+                        step.result = parsed.get("result", "Step completed")
+                        step.attachments = parsed.get("attachments", [])
                         if not step.success:
                             step.status = ExecutionStatus.FAILED
-                        status_enum = (
-                            StepStatus.COMPLETED if step.success
-                            else StepStatus.FAILED)
+                        status_enum = (StepStatus.COMPLETED if step.success
+                                       else StepStatus.FAILED)
                         emit_event("step", status=status_enum.value,
                                    step=step.to_dict())
                         if step.result:
-                            emit_event("message",
-                                       message=step.result,
+                            emit_event("message", message=step.result,
                                        role="assistant")
                         return
 
                     if parsed.get("thinking"):
-                        emit_event("thinking",
-                                   content=parsed["thinking"])
+                        thinking_text = str(parsed["thinking"])
+                        # Only show clean, user-friendly thinking (not raw JSON)
+                        if len(thinking_text) < 200 and not thinking_text.strip().startswith("{"):
+                            emit_event("thinking", content=thinking_text)
                         exec_messages.append(
-                            {"role": "assistant", "content": content})
+                            {"role": "assistant", "content": text})
                         exec_messages.append(
                             {"role": "user",
-                             "content": ("Good analysis. Now execute "
-                                         "using a tool.")})
+                             "content": "Good. Now execute using a tool."})
                         continue
 
                     if parsed.get("tool"):
@@ -805,60 +1019,51 @@ class DzeckAgent:
 
                         if resolved_name is None:
                             exec_messages.append(
-                                {"role": "assistant",
-                                 "content": content})
-                            available = ", ".join(TOOLS.keys())
+                                {"role": "assistant", "content": text})
                             exec_messages.append(
                                 {"role": "user",
-                                 "content": (
-                                     "Unknown tool '{}'. Available: "
-                                     "{}. Try again."
-                                     .format(tool_name, available))})
+                                 "content": "Unknown tool '{}'. Available: {}. Try again.".format(
+                                     tool_name, ", ".join(TOOLS.keys()))})
                             continue
 
                         tc_id = "tc_{}_{}".format(step.id, iteration)
                         result_str = self._handle_tool_call(
-                            resolved_name, tool_args, tc_id,
-                            step, iteration)
+                            resolved_name, tool_args, tc_id, step, iteration)
 
                         if result_str == "STEP_DONE":
                             return
 
                         exec_messages.append(
-                            {"role": "assistant", "content": content})
+                            {"role": "assistant", "content": text})
                         exec_messages.append(
                             {"role": "user",
                              "content": (
-                                 "Tool result:\n{}\n\nContinue "
-                                 "executing the step. Use another "
-                                 "tool or call task_complete when "
-                                 "finished."
+                                 "Tool result:\n{}\n\n"
+                                 "Continue executing. Use another tool or "
+                                 "call task_complete when finished."
                              ).format(result_str)})
 
                         if iteration > 0 and iteration % 5 == 0:
                             self.memory.compact()
                         continue
 
+                    # Only forward clean natural-language messages (not JSON)
                     if parsed.get("message"):
-                        emit_event("message",
-                                   message=parsed["message"],
-                                   role="assistant")
+                        msg_text = parsed["message"]
+                        emit_event("message", message=msg_text, role="assistant")
 
-                # Text with no actionable JSON = step complete
+                # No tool call, no actionable JSON → step complete
                 step.status = ExecutionStatus.COMPLETED
                 step.success = True
-                step.result = content[:500] if content else "Step completed"
-                emit_event("step",
-                           status=StepStatus.COMPLETED.value,
+                step.result = text[:500] if text else "Step completed"
+                emit_event("step", status=StepStatus.COMPLETED.value,
                            step=step.to_dict())
-                if content:
-                    emit_event("message", message=content[:2000],
-                               role="assistant")
+                if text and not text.strip().startswith("{"):
+                    emit_event("message", message=text[:2000], role="assistant")
                 return
 
             except Exception as e:
-                emit_event("error",
-                           error="Step execution error: {}".format(e))
+                emit_event("error", error="Step execution error: {}".format(e))
                 step.status = ExecutionStatus.FAILED
                 step.error = str(e)
                 emit_event("step", status=StepStatus.FAILED.value,
@@ -869,8 +1074,7 @@ class DzeckAgent:
         step.status = ExecutionStatus.FAILED
         step.success = False
         step.result = "Step incomplete (max iterations reached)"
-        emit_event("step", status=StepStatus.FAILED.value,
-                   step=step.to_dict())
+        emit_event("step", status=StepStatus.FAILED.value, step=step.to_dict())
 
     def update_plan(self, plan: Plan, completed_step: Step) -> None:
         """Update the plan based on completed step result."""
@@ -882,8 +1086,7 @@ class DzeckAgent:
                 status = "Success" if s.success else "Failed"
                 completed_steps_info.append(
                     "Step {} ({}): {} - {}".format(
-                        s.id, s.description, status,
-                        s.result or "No result"))
+                        s.id, s.description, status, s.result or "No result"))
 
         current_step_info = "Step {}: {}".format(
             completed_step.id, completed_step.description)
@@ -893,12 +1096,14 @@ class DzeckAgent:
         plan_info = json.dumps(
             {
                 "language": plan.language,
-                "completed_steps": [
-                    s.to_dict() for s in plan.steps if s.is_done()
-                ],
+                "completed_steps": [s.to_dict() for s in plan.steps if s.is_done()],
                 "remaining_steps": [s.to_dict() for s in remaining],
             },
             default=str,
+        )
+
+        json_instruction = (
+            "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown, no explanation."
         )
 
         prompt = UPDATE_PLAN_PROMPT.format(
@@ -909,13 +1114,12 @@ class DzeckAgent:
         )
 
         messages = [
-            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT + json_instruction},
             {"role": "user", "content": prompt},
         ]
 
         try:
-            response_text = call_text_with_retry(
-                messages, self.model, response_format="json_object")
+            response_text = call_text_with_retry(messages)
             parsed = self._parse_response(response_text)
 
             if parsed and "steps" in parsed:
@@ -940,8 +1144,7 @@ class DzeckAgent:
                            plan=safe_plan_dict(plan))
 
         except Exception as e:
-            emit_event("error",
-                       error="Plan update skipped: {}".format(e))
+            emit_event("error", error="Plan update skipped: {}".format(e))
 
     def summarize(self, plan: Plan, user_message: str) -> None:
         """Generate a final summary of the completed task."""
@@ -950,10 +1153,8 @@ class DzeckAgent:
         step_results = []
         for s in plan.steps:
             status = "Success" if s.success else "Failed"
-            step_results.append(
-                "- Step {} ({}): {} - {}".format(
-                    s.id, s.description, status,
-                    s.result or "No result"))
+            step_results.append("- Step {} ({}): {} - {}".format(
+                s.id, s.description, status, s.result or "No result"))
 
         prompt = SUMMARIZE_PROMPT.format(
             step_results="\n".join(step_results),
@@ -966,7 +1167,7 @@ class DzeckAgent:
         ]
 
         try:
-            response_text = call_text_with_retry(messages, self.model)
+            response_text = call_text_with_retry(messages)
             parsed = self._parse_response(response_text)
 
             if parsed and parsed.get("message"):
@@ -975,33 +1176,27 @@ class DzeckAgent:
                     role="assistant",
                     attachments=parsed.get("attachments", []))
             else:
-                emit_event("message", message=response_text[:2000],
-                           role="assistant")
+                # Emit plain text summary only — no raw JSON to user
+                clean = response_text.strip()
+                if clean and not clean.startswith("{"):
+                    emit_event("message", message=clean[:2000], role="assistant")
+                elif parsed:
+                    # Try to extract any meaningful text from parsed JSON
+                    summary = (parsed.get("summary") or parsed.get("result")
+                               or parsed.get("text") or "Task completed.")
+                    emit_event("message", message=str(summary)[:2000], role="assistant")
+                else:
+                    emit_event("message", message="Task completed.", role="assistant")
+
         except Exception as e:
-            emit_event(
-                "message",
-                message="Task completed. Summary unavailable: {}".format(e),
-                role="assistant",
-            )
+            emit_event("message", message="Task completed.", role="assistant")
 
     def _is_simple_query(self, user_message: str) -> bool:
-        """Detect if the user message is a simple query that doesn't need tools.
-
-        Matching ai-manus behavior: the agent should be smart about when
-        to use tools vs. when to respond directly. Simple greetings,
-        casual questions, and basic knowledge queries don't need the
-        full Plan-Act flow.
-
-        Uses word-boundary matching via regex to avoid false positives
-        (e.g. "hai" should not match inside "chain").
-        """
+        """Detect if the user message is a simple query that doesn't need tools."""
         msg = user_message.strip().lower()
         word_count = len(msg.split())
 
         if word_count <= 4:
-            # Check for greetings and simple phrases using word boundaries.
-            # Gate uses <=4 to allow multi-word patterns like
-            # "what can you do" (4 words) and "apa yang bisa" (3 words).
             simple_patterns = [
                 r"\bhi\b", r"\bhello\b", r"\bhey\b",
                 r"\bhalo\b", r"\bhai\b", r"\bhei\b",
@@ -1023,20 +1218,17 @@ class DzeckAgent:
                 if re.search(pattern, msg):
                     return True
 
-        # Detect math / calculation questions (answer directly, no tools needed)
-        # Examples: "berapa 2+2?", "hitung 5*6", "what is 100/4", "123 * 456"
         math_patterns = [
             r"^berapa\s+[\d\s\+\-\*\/\(\)\.]+\??$",
             r"^hitung\s+[\d\s\+\-\*\/\(\)\.]+\??$",
             r"^calculate\s+[\d\s\+\-\*\/\(\)\.]+\??$",
             r"^what is\s+[\d\s\+\-\*\/\(\)\.]+\??$",
-            r"^\d[\d\s\+\-\*\/\(\)\.]+\=?\??$",  # pure math expression
+            r"^\d[\d\s\+\-\*\/\(\)\.]+\=?\??$",
         ]
         for pattern in math_patterns:
             if re.search(pattern, msg):
                 return True
 
-        # Detect simple knowledge questions (no tool needed)
         knowledge_starters = [
             "what is", "what are", "who is", "who are",
             "when was", "when is", "where is", "where are",
@@ -1045,7 +1237,6 @@ class DzeckAgent:
             "apa itu", "siapa", "kapan", "dimana", "mengapa",
             "jelaskan", "ceritakan", "bagaimana cara",
         ]
-        # Use word-boundary check for action keywords too
         action_patterns = [
             r"\bhttp", r"[/\\]", r"```",
             r"\bfile\b", r"\binstall\b", r"\brun\b",
@@ -1054,54 +1245,44 @@ class DzeckAgent:
         ]
         for starter in knowledge_starters:
             if msg.startswith(starter):
-                # Only if there's no URL, file path, or code/action indication
                 if not any(re.search(p, msg) for p in action_patterns):
                     return True
 
         return False
 
     def _respond_directly(self, user_message: str) -> None:
-        """Respond directly without Plan-Act flow for simple queries.
-
-        Uses the LLM to generate a direct response without tool calling.
-        This matches ai-manus behavior where the agent is smart about
-        not always creating a plan.
-        """
+        """Respond directly without Plan-Act flow for simple queries."""
         messages = [
             {"role": "system", "content": (
                 "You are Dzeck, an AI assistant created by the Dzeck team. "
-                "Respond naturally and helpfully to the user's message. "
-                "Be concise but informative. "
-                "Respond in the same language as the user's message."
+                "Respond naturally and helpfully. Be concise but informative. "
+                "Respond in the same language as the user's message. "
+                "Do NOT output JSON — respond with plain text only."
             )},
             {"role": "user", "content": user_message},
         ]
 
         try:
-            response_text = call_text_with_retry(messages, self.model)
+            response_text = call_text_with_retry(messages)
             if response_text:
-                emit_event("message", message=response_text[:4000],
-                           role="assistant")
+                # Never forward raw JSON as a message
+                clean = response_text.strip()
+                if clean.startswith("{") or clean.startswith("["):
+                    parsed = self._parse_response(clean)
+                    clean = (parsed.get("message") or parsed.get("response")
+                             or parsed.get("text") or "Hello! How can I help you?")
+                emit_event("message", message=clean[:4000], role="assistant")
             else:
                 emit_event("message",
                            message="I'm sorry, I couldn't generate a response.",
                            role="assistant")
         except Exception as e:
-            emit_event("error",
-                       error="Response error: {}".format(e))
+            emit_event("error", error="Response error: {}".format(e))
 
     def run(self, user_message: str,
             attachments: Optional[List[str]] = None) -> None:
-        """Main agent flow: Smart routing + Plan -> Execute -> Update -> Summarize.
-
-        Implements ai-manus PlanActFlow state machine:
-        IDLE -> PLANNING -> EXECUTING -> UPDATING -> SUMMARIZING -> COMPLETED
-
-        Smart routing: Simple queries are handled directly without creating
-        a plan. Complex tasks go through the full Plan-Act flow.
-        """
+        """Main agent flow: Smart routing → Plan → Execute → Summarize."""
         try:
-            # Smart routing: detect if this is a simple query
             if not attachments and self._is_simple_query(user_message):
                 self._respond_directly(user_message)
                 emit_event("done", success=True)
@@ -1115,17 +1296,13 @@ class DzeckAgent:
 
             emit_event("title", title=self.plan.title)
             if self.plan.message:
-                emit_event("message", message=self.plan.message,
-                           role="assistant")
+                emit_event("message", message=self.plan.message, role="assistant")
             emit_event("plan", status=PlanStatus.CREATED.value,
                        plan=safe_plan_dict(self.plan))
 
             if not self.plan.steps:
-                emit_event(
-                    "message",
-                    message="No actionable steps needed.",
-                    role="assistant",
-                )
+                emit_event("message", message="No actionable steps needed.",
+                           role="assistant")
                 emit_event("done", success=True)
                 return
 
@@ -1142,8 +1319,7 @@ class DzeckAgent:
 
                 next_step = self.plan.get_next_step()
                 if next_step:
-                    emit_event("plan",
-                               status=PlanStatus.UPDATING.value,
+                    emit_event("plan", status=PlanStatus.UPDATING.value,
                                plan=safe_plan_dict(self.plan))
                     self.update_plan(self.plan, step)
 
@@ -1158,20 +1334,18 @@ class DzeckAgent:
 
         except Exception as e:
             self.state = FlowState.FAILED
-            emit_event("error",
-                       error="Agent error: {}".format(e))
+            emit_event("error", error="Agent error: {}".format(e))
             traceback.print_exc(file=sys.stderr)
             emit_event("done", success=False)
 
 
 def main() -> None:
-    """Entry point - reads task from stdin, runs agent, streams events."""
+    """Entry point — reads task from stdin, runs agent, streams events."""
     try:
         raw_input = sys.stdin.read()
         input_data = json.loads(raw_input)
 
         user_message = input_data.get("message", "")
-        model = input_data.get("model", DEFAULT_MODEL)
         messages = input_data.get("messages", [])
         attachments = input_data.get("attachments", [])
 
@@ -1186,12 +1360,11 @@ def main() -> None:
             emit_event("done", success=False)
             return
 
-        agent = DzeckAgent(model=model)
+        agent = DzeckAgent()
         agent.run(user_message, attachments)
 
     except Exception as e:
-        emit_event("error",
-                   error="Fatal error: {}".format(e))
+        emit_event("error", error="Fatal error: {}".format(e))
         traceback.print_exc(file=sys.stderr)
         emit_event("done", success=False)
 

@@ -18,9 +18,10 @@ interface ChatInputProps {
   disabled?: boolean;
   onStop?: () => void;
   isGenerating?: boolean;
+  placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled, onStop, isGenerating }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, onStop, isGenerating, placeholder }: ChatInputProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const inputRef = useRef<TextInput>(null);
@@ -108,7 +109,7 @@ export function ChatInput({ onSend, disabled, onStop, isGenerating }: ChatInputP
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Message Dzeck AI..."
+            placeholder={placeholder || "Message Dzeck AI..."}
             placeholderTextColor="#636366"
             value={text}
             onChangeText={setText}
