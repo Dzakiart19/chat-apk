@@ -10,9 +10,10 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { KeyboardProviderWrapper } from "@/components/KeyboardProviderWrapper";
 import { queryClient } from "@/lib/query-client";
 
 SplashScreen.preventAutoHideAsync();
@@ -23,14 +24,6 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
-}
-
-function KeyboardProviderWrapper({ children }: { children: React.ReactNode }) {
-  if (Platform.OS === "web") {
-    return <>{children}</>;
-  }
-  const { KeyboardProvider } = require("react-native-keyboard-controller");
-  return <KeyboardProvider>{children}</KeyboardProvider>;
 }
 
 export default function RootLayout() {

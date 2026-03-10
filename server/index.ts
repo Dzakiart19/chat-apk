@@ -297,22 +297,24 @@ function setupErrorHandler(app: express.Application) {
     },
   );
 
-  // Also serve web chat on port 8081 (external port 80 in Replit)
-  const webPort = 8081;
+  // Also serve web chat on additional ports so users land on web chat
+  // regardless of which port they access
   const { createServer: createHttpServer } = await import("node:http");
-  const webServer = createHttpServer(app);
-  webServer.listen(
-    {
-      port: webPort,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`express server also serving on port ${webPort} (web access)`);
-    },
-  ).on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code !== "EADDRINUSE") {
-      console.error(`Port ${webPort} error:`, err);
-    }
-  });
+  const extraPorts = [8081, 8082]; // 8081=external:80, 8082=external:3000
+  for (const webPort of extraPorts) {
+    createHttpServer(app).listen(
+      {
+        port: webPort,
+        host: "0.0.0.0",
+        reusePort: true,
+      },
+      () => {
+        log(`express server also serving on port ${webPort}`);
+      },
+    ).on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EADDRINUSE") {
+        console.error(`Port ${webPort} error:`, err);
+      }
+    });
+  }
 })();
