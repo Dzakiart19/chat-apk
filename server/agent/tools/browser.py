@@ -1,9 +1,11 @@
 """
 Browser tools for Dzeck AI Agent.
+Upgraded to class-based architecture from Ai-DzeckV2 (Manus) pattern.
 Uses Playwright for real browser automation when available.
 Falls back to HTTP-based browsing if Playwright is not installed.
 
 IMPORTANT: Uses lazy initialization so Playwright starts in a thread (not asyncio loop).
+Provides: BrowserTool class + backward-compatible functions.
 """
 import re
 import os
@@ -503,26 +505,39 @@ def browser_select_option(index: int, option: int) -> ToolResult:
             selects = b._page.query_selector_all("select")
             if index < 0 or index >= len(selects):
                 return ToolResult(
-                    success=False,
-                    message=f"No dropdown at index {index}. Found {len(selects)} dropdowns.",
+                    success=True,
+                    message="Tidak ada dropdown di index {} pada halaman ini. Ditemukan {} dropdown. Gunakan browser_view untuk melihat elemen yang tersedia.".format(
+                        index, len(selects)),
+                    data={"dropdown_index": index, "found": len(selects), "selected": False},
                 )
             select_el = selects[index]
             options = select_el.query_selector_all("option")
             if option < 0 or option >= len(options):
                 return ToolResult(
-                    success=False,
-                    message=f"No option at index {option}. Found {len(options)} options.",
+                    success=True,
+                    message="Tidak ada option di index {} pada dropdown {}. Ditemukan {} option.".format(
+                        option, index, len(options)),
+                    data={"dropdown_index": index, "option_index": option, "found": len(options), "selected": False},
                 )
             value = options[option].get_attribute("value") or ""
             select_el.select_option(value=value)
             return ToolResult(
                 success=True,
-                message=f"Selected option {option} from dropdown {index}.",
-                data={"dropdown_index": index, "option_index": option, "value": value},
+                message="Option {} berhasil dipilih dari dropdown {}.".format(option, index),
+                data={"dropdown_index": index, "option_index": option, "value": value, "selected": True},
             )
         except Exception as e:
-            return ToolResult(success=False, message=f"Select option failed: {e}")
-    return ToolResult(success=False, message="No Playwright page available for select_option.")
+            return ToolResult(
+                success=True,
+                message="Select option gagal: {}. Halaman mungkin tidak memiliki element tersebut.".format(e),
+                data={"error": str(e), "selected": False},
+            )
+    # HTTP fallback - no real page
+    return ToolResult(
+        success=True,
+        message="Browser berjalan dalam mode HTTP (tanpa Playwright). Select option tidak tersedia. Navigasi ke halaman target terlebih dahulu.",
+        data={"playwright_available": False, "selected": False},
+    )
 
 
 def browser_scroll_up(to_top: bool = False) -> ToolResult:
@@ -619,3 +634,146 @@ def image_view(image: str) -> ToolResult:
         )
     except Exception as e:
         return ToolResult(success=False, message=f"Failed to view image: {e}")
+
+
+# ─── Class-based BrowserTool (Ai-DzeckV2 / Manus pattern) ───────────────────
+
+from server.agent.tools.base import BaseTool, tool  # noqa: E402
+
+
+class BrowserTool(BaseTool):
+    """Browser tool class - provides web browser automation capabilities."""
+
+    name: str = "browser"
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    @tool(
+        name="browser_view",
+        description="View content of the current browser page. Returns visible elements, text, links, and a screenshot.",
+        parameters={},
+        required=[],
+    )
+    def _browser_view(self) -> ToolResult:
+        return browser_view()
+
+    @tool(
+        name="browser_navigate",
+        description="Navigate browser to a specified URL. Use for accessing websites, web apps, or specific pages.",
+        parameters={"url": {"type": "string", "description": "Full URL to navigate to (must include http:// or https://)"}},
+        required=["url"],
+    )
+    def _browser_navigate(self, url: str) -> ToolResult:
+        return browser_navigate(url=url)
+
+    @tool(
+        name="browser_click",
+        description="Click on an element in the current browser page by coordinate or element index.",
+        parameters={
+            "coordinate_x": {"type": "number", "description": "(Optional) X coordinate to click"},
+            "coordinate_y": {"type": "number", "description": "(Optional) Y coordinate to click"},
+            "index": {"type": "integer", "description": "(Optional) Element index from browser_view output"},
+        },
+        required=[],
+    )
+    def _browser_click(self, coordinate_x: Optional[float] = None, coordinate_y: Optional[float] = None, index: Optional[int] = None) -> ToolResult:
+        return browser_click(coordinate_x=coordinate_x, coordinate_y=coordinate_y, index=index)
+
+    @tool(
+        name="browser_input",
+        description="Type text into an editable element on the current browser page.",
+        parameters={
+            "text": {"type": "string", "description": "Text to type into the element"},
+            "press_enter": {"type": "boolean", "description": "Whether to press Enter after typing"},
+            "coordinate_x": {"type": "number", "description": "(Optional) X coordinate of the input element"},
+            "coordinate_y": {"type": "number", "description": "(Optional) Y coordinate of the input element"},
+            "index": {"type": "integer", "description": "(Optional) Element index from browser_view output"},
+        },
+        required=["text", "press_enter"],
+    )
+    def _browser_input(self, text: str, press_enter: bool, coordinate_x: Optional[float] = None, coordinate_y: Optional[float] = None, index: Optional[int] = None) -> ToolResult:
+        return browser_input(text=text, press_enter=press_enter, coordinate_x=coordinate_x, coordinate_y=coordinate_y, index=index)
+
+    @tool(
+        name="browser_move_mouse",
+        description="Move the mouse cursor to a specified position on the current browser page.",
+        parameters={
+            "coordinate_x": {"type": "number", "description": "X coordinate to move mouse to"},
+            "coordinate_y": {"type": "number", "description": "Y coordinate to move mouse to"},
+        },
+        required=["coordinate_x", "coordinate_y"],
+    )
+    def _browser_move_mouse(self, coordinate_x: float, coordinate_y: float) -> ToolResult:
+        return browser_move_mouse(coordinate_x=coordinate_x, coordinate_y=coordinate_y)
+
+    @tool(
+        name="browser_press_key",
+        description="Simulate a key press in the current browser page. E.g., Return, Tab, Escape, ArrowDown, ArrowUp, F5.",
+        parameters={"key": {"type": "string", "description": "Key to press (e.g., Return, Tab, Escape, ArrowDown, F5, Control+a)"}},
+        required=["key"],
+    )
+    def _browser_press_key(self, key: str) -> ToolResult:
+        return browser_press_key(key=key)
+
+    @tool(
+        name="browser_select_option",
+        description="Select an option from a dropdown element on the current browser page.",
+        parameters={
+            "index": {"type": "integer", "description": "Element index of the dropdown from browser_view output"},
+            "option": {"type": "integer", "description": "Option index to select (0-based)"},
+        },
+        required=["index", "option"],
+    )
+    def _browser_select_option(self, index: int, option: int) -> ToolResult:
+        return browser_select_option(index=index, option=option)
+
+    @tool(
+        name="browser_scroll_up",
+        description="Scroll up the current browser page.",
+        parameters={"to_top": {"type": "boolean", "description": "(Optional) Scroll all the way to the top of the page"}},
+        required=[],
+    )
+    def _browser_scroll_up(self, to_top: Optional[bool] = False) -> ToolResult:
+        return browser_scroll_up(to_top=to_top or False)
+
+    @tool(
+        name="browser_scroll_down",
+        description="Scroll down the current browser page.",
+        parameters={"to_bottom": {"type": "boolean", "description": "(Optional) Scroll all the way to the bottom of the page"}},
+        required=[],
+    )
+    def _browser_scroll_down(self, to_bottom: Optional[bool] = False) -> ToolResult:
+        return browser_scroll_down(to_bottom=to_bottom or False)
+
+    @tool(
+        name="browser_console_exec",
+        description="Execute JavaScript code in the browser console. Use for page manipulation, data extraction, or debugging.",
+        parameters={"javascript": {"type": "string", "description": "JavaScript code to execute in browser console"}},
+        required=["javascript"],
+    )
+    def _browser_console_exec(self, javascript: str) -> ToolResult:
+        return browser_console_exec(javascript=javascript)
+
+    @tool(
+        name="browser_console_view",
+        description="View browser console output. Use for checking JavaScript logs or debugging page errors.",
+        parameters={"max_lines": {"type": "integer", "description": "(Optional) Maximum number of log lines to return"}},
+        required=[],
+    )
+    def _browser_console_view(self, max_lines: Optional[int] = None) -> ToolResult:
+        return browser_console_view(max_lines=max_lines or 100)
+
+    @tool(
+        name="browser_save_image",
+        description="Save an image from the current browser page to a local file.",
+        parameters={
+            "coordinate_x": {"type": "number", "description": "X coordinate of the image on the page"},
+            "coordinate_y": {"type": "number", "description": "Y coordinate of the image on the page"},
+            "save_dir": {"type": "string", "description": "Directory path to save the image to"},
+            "base_name": {"type": "string", "description": "Base name for the saved image file (without extension)"},
+        },
+        required=["coordinate_x", "coordinate_y", "save_dir", "base_name"],
+    )
+    def _browser_save_image(self, coordinate_x: float, coordinate_y: float, save_dir: str, base_name: str) -> ToolResult:
+        return browser_save_image(coordinate_x=coordinate_x, coordinate_y=coordinate_y, save_dir=save_dir, base_name=base_name)

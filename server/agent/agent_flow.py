@@ -49,23 +49,21 @@ _load_dotenv()
 # Force unbuffered stdout for real-time streaming to Node.js subprocess
 sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
 
+from server.agent.tools.registry import (
+    TOOLS,
+    TOOL_ALIASES,
+    TOOLKIT_MAP,
+    resolve_tool_name,
+    get_toolkit_name,
+    execute_tool,
+    get_all_tool_schemas,
+)
+# Individual function imports for backward compatibility
 from server.agent.tools.search import web_search, web_browse, info_search_web
-from server.agent.tools.shell import (
-    shell_exec, shell_view, shell_wait,
-    shell_write_to_process, shell_kill_process,
-)
-from server.agent.tools.file import (
-    file_read, file_write, file_str_replace,
-    file_find_by_name, file_find_in_content,
-)
+from server.agent.tools.shell import shell_exec, shell_view, shell_wait, shell_write_to_process, shell_kill_process
+from server.agent.tools.file import file_read, file_write, file_str_replace, file_find_by_name, file_find_in_content, image_view
 from server.agent.tools.message import message_notify_user, message_ask_user
-from server.agent.tools.browser import (
-    browser_navigate, browser_view, browser_click,
-    browser_input, browser_move_mouse, browser_press_key,
-    browser_select_option, browser_scroll_up, browser_scroll_down,
-    browser_console_exec, browser_console_view, browser_save_image,
-    image_view,
-)
+from server.agent.tools.browser import browser_navigate, browser_view, browser_click, browser_input, browser_move_mouse, browser_press_key, browser_select_option, browser_scroll_up, browser_scroll_down, browser_console_exec, browser_console_view, browser_save_image
 from server.agent.tools.mcp import mcp_call_tool, mcp_list_tools
 
 from server.agent.models.plan import Plan, Step, ExecutionStatus
@@ -99,73 +97,6 @@ class FlowState(str, Enum):
     FAILED = "failed"
 
 
-TOOLS: Dict[str, Any] = {
-    "message_notify_user": message_notify_user,
-    "message_ask_user": message_ask_user,
-    "shell_exec": shell_exec,
-    "shell_view": shell_view,
-    "shell_wait": shell_wait,
-    "shell_write_to_process": shell_write_to_process,
-    "shell_kill_process": shell_kill_process,
-    "file_read": file_read,
-    "file_write": file_write,
-    "file_str_replace": file_str_replace,
-    "file_find_by_name": file_find_by_name,
-    "file_find_in_content": file_find_in_content,
-    "image_view": image_view,
-    "info_search_web": info_search_web,
-    "browser_navigate": browser_navigate,
-    "browser_view": browser_view,
-    "browser_click": browser_click,
-    "browser_input": browser_input,
-    "browser_move_mouse": browser_move_mouse,
-    "browser_press_key": browser_press_key,
-    "browser_select_option": browser_select_option,
-    "browser_scroll_up": browser_scroll_up,
-    "browser_scroll_down": browser_scroll_down,
-    "browser_console_exec": browser_console_exec,
-    "browser_console_view": browser_console_view,
-    "browser_save_image": browser_save_image,
-    "web_search": web_search,
-    "web_browse": web_browse,
-    "mcp_call_tool": mcp_call_tool,
-    "mcp_list_tools": mcp_list_tools,
-}
-
-TOOL_ALIASES: Dict[str, str] = {
-    "message_notify": "message_notify_user",
-    "message_ask": "message_ask_user",
-    "file_find": "file_find_by_name",
-    "browser_open": "browser_navigate",
-    "browse": "web_browse",
-    "search": "info_search_web",
-    "web_search": "info_search_web",
-    "browser_type": "browser_input",
-    "browser_scroll": "browser_scroll_down",
-    "browser_scroll_to_bottom": "browser_scroll_down",
-    "browser_read_links": "browser_view",
-    "browser_restart": "browser_navigate",
-}
-
-TOOLKIT_MAP: Dict[str, str] = {
-    "shell_exec": "shell", "shell_view": "shell", "shell_wait": "shell",
-    "shell_write_to_process": "shell", "shell_kill_process": "shell",
-    "file_read": "file", "file_write": "file", "file_str_replace": "file",
-    "file_find_by_name": "file", "file_find_in_content": "file",
-    "image_view": "file",
-    "info_search_web": "search", "web_search": "search", "web_browse": "browser",
-    "browser_navigate": "browser", "browser_view": "browser",
-    "browser_click": "browser", "browser_input": "browser",
-    "browser_move_mouse": "browser", "browser_press_key": "browser",
-    "browser_select_option": "browser",
-    "browser_scroll_up": "browser", "browser_scroll_down": "browser",
-    "browser_console_exec": "browser", "browser_console_view": "browser",
-    "browser_save_image": "browser",
-    "message_notify_user": "message", "message_ask_user": "message",
-    "mcp_call_tool": "mcp", "mcp_list_tools": "mcp",
-}
-
-
 def _get_cf_url() -> str:
     account_id = os.environ.get("CF_ACCOUNT_ID", "")
     gateway_name = os.environ.get("CF_GATEWAY_NAME", "")
@@ -187,344 +118,41 @@ if not CF_API_KEY:
     sys.stderr.flush()
 
 
-TOOL_SCHEMAS: List[Dict[str, Any]] = [
-    {
+def _build_tool_schemas() -> List[Dict[str, Any]]:
+    """Build TOOL_SCHEMAS dynamically from class-based tool registry.
+    Adds the special 'idle' tool and converts OpenAI format to CF-native format.
+    """
+    idle_schema = {
         "name": "idle",
         "description": (
-            "A special tool to indicate you have completed all tasks and are about to enter idle state.\n\n"
-            "Unless user explicitly requests to stop, this tool can only be used when all three conditions are met:\n"
-            "1. All tasks are perfectly completed, tested, and verified\n"
-            "2. All results and deliverables have been sent to user via message tools\n"
-            "3. No further actions are needed, ready to enter idle state until user provides new instructions"
+            "Alat khusus untuk menandakan bahwa semua tugas telah selesai dan agen siap kembali ke idle.\n\n"
+            "Hanya gunakan saat SEMUA kondisi ini terpenuhi:\n"
+            "1. Semua tugas sudah selesai sempurna, ditest, dan terverifikasi\n"
+            "2. Semua hasil dan output sudah dikirim ke user melalui message tools\n"
+            "3. Tidak ada tindakan lanjut yang diperlukan"
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "success": {"type": "boolean", "description": "Whether the step succeeded"},
-                "result": {"type": "string", "description": "Summary of what was accomplished"},
+                "success": {"type": "boolean", "description": "Apakah langkah berhasil"},
+                "result": {"type": "string", "description": "Ringkasan apa yang sudah dikerjakan"},
             },
             "required": ["success", "result"],
         },
-    },
-    {
-        "name": "message_notify_user",
-        "description": (
-            "Send a message to user.\n\n"
-            "Recommended scenarios:\n"
-            "- Immediately acknowledge receipt of any user message\n"
-            "- When achieving milestone progress or significant changes in task planning\n"
-            "- Before executing complex tasks, inform user of expected duration\n"
-            "- When changing methods or strategies, explain reasons to user\n"
-            "- When attachments need to be shown to user\n"
-            "- When all tasks are completed"
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "text": {"type": "string", "description": "Message text to send to the user"},
-                "attachments": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of file paths or URLs to attach",
-                },
-            },
-            "required": ["text"],
-        },
-    },
-    {
-        "name": "message_ask_user",
-        "description": (
-            "Ask user a question and wait for response.\n\n"
-            "Recommended scenarios:\n"
-            "- When user presents complex requirements, clarify your understanding\n"
-            "- When user confirmation is needed for an operation\n"
-            "- When user input is required at critical decision points\n"
-            "- When suggesting temporary browser takeover to user"
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "text": {"type": "string", "description": "Question to ask the user"},
-                "attachments": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of file paths or URLs to attach",
-                },
-            },
-            "required": ["text"],
-        },
-    },
-    {
-        "name": "shell_view",
-        "description": "View the content of a specified shell session.",
-        "parameters": {
-            "type": "object",
-            "properties": {"id": {"type": "string"}},
-            "required": ["id"],
-        },
-    },
-    {
-        "name": "shell_wait",
-        "description": "Wait for the running process in a specified shell session to return.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "seconds": {"type": "integer"},
-            },
-            "required": ["id"],
-        },
-    },
-    {
-        "name": "shell_exec",
-        "description": "Execute commands in a specified shell session.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string", "description": "Unique identifier of the target shell session"},
-                "exec_dir": {"type": "string", "description": "Working directory for command execution (absolute path)"},
-                "command": {"type": "string", "description": "Shell commands to execute"},
-            },
-            "required": ["id", "exec_dir", "command"],
-        },
-    },
-    {
-        "name": "shell_write_to_process",
-        "description": "Write input to a running process in a specified shell session.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "input": {"type": "string"},
-                "press_enter": {"type": "boolean"},
-            },
-            "required": ["id", "input", "press_enter"],
-        },
-    },
-    {
-        "name": "shell_kill_process",
-        "description": "Terminate a running process in a specified shell session.",
-        "parameters": {
-            "type": "object",
-            "properties": {"id": {"type": "string"}},
-            "required": ["id"],
-        },
-    },
-    {
-        "name": "file_read",
-        "description": "Read file content.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file": {"type": "string"},
-                "start_line": {"type": "integer"},
-                "end_line": {"type": "integer"},
-                "sudo": {"type": "boolean"},
-            },
-            "required": ["file"],
-        },
-    },
-    {
-        "name": "file_write",
-        "description": "Overwrite or append content to a file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file": {"type": "string"},
-                "content": {"type": "string"},
-                "append": {"type": "boolean"},
-                "leading_newline": {"type": "boolean"},
-                "trailing_newline": {"type": "boolean"},
-                "sudo": {"type": "boolean"},
-            },
-            "required": ["file", "content"],
-        },
-    },
-    {
-        "name": "file_str_replace",
-        "description": "Replace specified string in a file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file": {"type": "string"},
-                "old_str": {"type": "string"},
-                "new_str": {"type": "string"},
-                "sudo": {"type": "boolean"},
-            },
-            "required": ["file", "old_str", "new_str"],
-        },
-    },
-    {
-        "name": "file_find_by_name",
-        "description": "Find files by name pattern under a directory.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Directory path to search in"},
-                "glob": {"type": "string", "description": "Glob pattern e.g. *.py or **/*.ts"},
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "file_find_in_content",
-        "description": "Search for text or regex pattern in files matching a glob under a directory.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "Directory path to search in"},
-                "glob": {"type": "string", "description": "Glob pattern to filter files"},
-                "pattern": {"type": "string", "description": "Text or regex pattern to search for"},
-            },
-            "required": ["path", "pattern"],
-        },
-    },
-    {
-        "name": "image_view",
-        "description": "View image content.",
-        "parameters": {
-            "type": "object",
-            "properties": {"image": {"type": "string"}},
-            "required": ["image"],
-        },
-    },
-    {
-        "name": "info_search_web",
-        "description": "Search web pages using search engine.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"},
-                "date_range": {
-                    "type": "string",
-                    "enum": ["all", "past_hour", "past_day", "past_week", "past_month", "past_year"],
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "browser_view",
-        "description": "View content of the current browser page.",
-        "parameters": {"type": "object"},
-    },
-    {
-        "name": "browser_navigate",
-        "description": "Navigate browser to specified URL.",
-        "parameters": {
-            "type": "object",
-            "properties": {"url": {"type": "string"}},
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "browser_click",
-        "description": "Click on elements in the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "coordinate_x": {"type": "number"},
-                "coordinate_y": {"type": "number"},
-                "index": {"type": "integer"},
-            },
-        },
-    },
-    {
-        "name": "browser_input",
-        "description": "Overwrite text in editable elements on the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "coordinate_x": {"type": "number"},
-                "coordinate_y": {"type": "number"},
-                "index": {"type": "integer"},
-                "text": {"type": "string"},
-                "press_enter": {"type": "boolean"},
-            },
-            "required": ["text", "press_enter"],
-        },
-    },
-    {
-        "name": "browser_move_mouse",
-        "description": "Move cursor to specified position on the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "coordinate_x": {"type": "number"},
-                "coordinate_y": {"type": "number"},
-            },
-            "required": ["coordinate_x", "coordinate_y"],
-        },
-    },
-    {
-        "name": "browser_press_key",
-        "description": "Simulate key press in the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {"key": {"type": "string"}},
-            "required": ["key"],
-        },
-    },
-    {
-        "name": "browser_select_option",
-        "description": "Select specified option from dropdown list element in the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "index": {"type": "integer"},
-                "option": {"type": "integer"},
-            },
-            "required": ["index", "option"],
-        },
-    },
-    {
-        "name": "browser_scroll_up",
-        "description": "Scroll up the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {"to_top": {"type": "boolean"}},
-        },
-    },
-    {
-        "name": "browser_scroll_down",
-        "description": "Scroll down the current browser page.",
-        "parameters": {
-            "type": "object",
-            "properties": {"to_bottom": {"type": "boolean"}},
-        },
-    },
-    {
-        "name": "browser_console_exec",
-        "description": "Execute JavaScript code in browser console.",
-        "parameters": {
-            "type": "object",
-            "properties": {"javascript": {"type": "string"}},
-            "required": ["javascript"],
-        },
-    },
-    {
-        "name": "browser_console_view",
-        "description": "View browser console output.",
-        "parameters": {
-            "type": "object",
-            "properties": {"max_lines": {"type": "integer"}},
-        },
-    },
-    {
-        "name": "browser_save_image",
-        "description": "Save image from current browser page to local file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "coordinate_x": {"type": "number"},
-                "coordinate_y": {"type": "number"},
-                "save_dir": {"type": "string"},
-                "base_name": {"type": "string"},
-            },
-            "required": ["coordinate_x", "coordinate_y", "save_dir", "base_name"],
-        },
-    },
-]
+    }
+    schemas = [idle_schema]
+    for openai_schema in get_all_tool_schemas():
+        fn = openai_schema.get("function", openai_schema)
+        schemas.append({
+            "name": fn.get("name", ""),
+            "description": fn.get("description", ""),
+            "parameters": fn.get("parameters", {"type": "object"}),
+        })
+    return schemas
+
+
+TOOL_SCHEMAS: List[Dict[str, Any]] = _build_tool_schemas()
+
 
 
 def make_event(event_type: str, **data: Any) -> Dict[str, Any]:
@@ -754,44 +382,6 @@ def _extract_cf_response(api_result: Dict[str, Any]) -> tuple:
                     tool_calls.append({"name": fn.get("name", ""), "arguments": args})
 
     return text, tool_calls
-
-
-def resolve_tool_name(name: str) -> Optional[str]:
-    if name in TOOLS:
-        return name
-    if name in TOOL_ALIASES:
-        return TOOL_ALIASES[name]
-    return None
-
-
-def get_toolkit_name(function_name: str) -> str:
-    return TOOLKIT_MAP.get(function_name, "unknown")
-
-
-def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> ToolResult:
-    resolved = resolve_tool_name(tool_name)
-    if resolved is None:
-        return ToolResult(
-            success=False,
-            message="Unknown tool '{}'. Available: {}".format(
-                tool_name, ", ".join(TOOLS.keys())),
-        )
-    tool_fn = TOOLS[resolved]
-    try:
-        result = tool_fn(**tool_args)
-        if isinstance(result, ToolResult):
-            return result
-        if isinstance(result, dict):
-            return ToolResult(
-                success=result.get("success", True),
-                message=json.dumps(result, default=str),
-                data=result,
-            )
-        return ToolResult(success=True, message=str(result))
-    except TypeError as e:
-        return ToolResult(success=False, message="Invalid args for '{}': {}".format(tool_name, e))
-    except Exception as e:
-        return ToolResult(success=False, message="Tool '{}' failed: {}".format(tool_name, e))
 
 
 def build_tool_content(tool_name: str, tool_result: ToolResult) -> Optional[Dict[str, Any]]:
