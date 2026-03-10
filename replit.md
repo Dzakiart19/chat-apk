@@ -38,8 +38,17 @@ Implements Manus-like autonomous agent architecture with class-based tools, Plan
 
 ### Running the Project
 
-1. **Backend** (Start Backend workflow): `npm run server:dev` — serves on port 5000
-2. **Frontend** (Start Frontend workflow): Expo Metro bundler on port 8081
+1. **Backend** (Start Backend workflow): `npm run server:dev` — serves on port 5000 + 8081 (web chat UI)
+2. **Frontend** (Start Frontend workflow): Expo Metro bundler on port 8082 (mobile only)
+
+### Web Access
+- **Web Chat UI**: Accessible at port 80 (default domain) → Express serves `server/templates/web-chat.html`
+- **Mobile Landing**: Accessible at `/mobile` path
+- **API**: All `/api/*` routes on port 5000
+
+### Components Added
+- `components/ChatBox.tsx` — Input box component for Expo mobile app (was missing)
+- `server/templates/web-chat.html` — Full-featured browser chat UI with SSE streaming
 
 ### Environment Variables (set in Replit Secrets)
 

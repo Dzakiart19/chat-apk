@@ -10,13 +10,11 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
@@ -25,6 +23,14 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
+}
+
+function KeyboardProviderWrapper({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === "web") {
+    return <>{children}</>;
+  }
+  const { KeyboardProvider } = require("react-native-keyboard-controller");
+  return <KeyboardProvider>{children}</KeyboardProvider>;
 }
 
 export default function RootLayout() {
@@ -47,12 +53,12 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView>
-          <KeyboardProvider>
+          <KeyboardProviderWrapper>
             <View style={layoutStyles.root}>
               <StatusBar style="light" />
               <RootLayoutNav />
             </View>
-          </KeyboardProvider>
+          </KeyboardProviderWrapper>
         </GestureHandlerRootView>
       </QueryClientProvider>
     </ErrorBoundary>

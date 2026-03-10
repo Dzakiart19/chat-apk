@@ -192,13 +192,20 @@ function serveLandingPage({
 }
 
 function configureExpoAndLanding(app: express.Application) {
-  const templatePath = path.resolve(
+  const landingTemplatePath = path.resolve(
     process.cwd(),
     "server",
     "templates",
     "landing-page.html",
   );
-  const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
+  const webChatTemplatePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "web-chat.html",
+  );
+  const landingPageTemplate = fs.readFileSync(landingTemplatePath, "utf-8");
+  const webChatTemplate = fs.readFileSync(webChatTemplatePath, "utf-8");
   const appName = getAppName();
 
   log("Serving static Expo files with dynamic manifest routing");
@@ -208,22 +215,33 @@ function configureExpoAndLanding(app: express.Application) {
       return next();
     }
 
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
-    }
-
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
-      return serveExpoManifest(platform, res);
-    }
-
-    if (req.path === "/") {
+    // Serve mobile landing page at /mobile
+    if (req.path === "/mobile") {
       return serveLandingPage({
         req,
         res,
         landingPageTemplate,
         appName,
       });
+    }
+
+    // Serve Expo manifest for native clients
+    if (req.path === "/manifest") {
+      const platform = req.header("expo-platform");
+      if (platform && (platform === "ios" || platform === "android")) {
+        return serveExpoManifest(platform, res);
+      }
+      return next();
+    }
+
+    // Serve web chat UI at root for browser clients
+    if (req.path === "/") {
+      const platform = req.header("expo-platform");
+      if (platform && (platform === "ios" || platform === "android")) {
+        return serveExpoManifest(platform, res);
+      }
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(webChatTemplate);
     }
 
     next();
@@ -278,4 +296,23 @@ function setupErrorHandler(app: express.Application) {
       log(`express server serving on port ${port}`);
     },
   );
+
+  // Also serve web chat on port 8081 (external port 80 in Replit)
+  const webPort = 8081;
+  const { createServer: createHttpServer } = await import("node:http");
+  const webServer = createHttpServer(app);
+  webServer.listen(
+    {
+      port: webPort,
+      host: "0.0.0.0",
+      reusePort: true,
+    },
+    () => {
+      log(`express server also serving on port ${webPort} (web access)`);
+    },
+  ).on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EADDRINUSE") {
+      console.error(`Port ${webPort} error:`, err);
+    }
+  });
 })();
