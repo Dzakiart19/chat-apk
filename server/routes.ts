@@ -57,73 +57,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     };
 
-    const apiReq = https.request(options, (apiRes) => {
-      let apiBuffer = "";
+    let retryCount = 0;
+    const maxRetries = 4;
 
-      apiRes.on("data", (chunk: Buffer) => {
-        apiBuffer += chunk.toString();
-        const lines = apiBuffer.split("\n");
-        apiBuffer = lines.pop() || "";
+    const attemptRequest = () => {
+      const apiReq = https.request(options, (apiRes) => {
+        // Handle rate limit / server errors with retry
+        if (apiRes.statusCode === 429 || (apiRes.statusCode && apiRes.statusCode >= 500)) {
+          const retryAfter = parseInt(apiRes.headers["retry-after"] as string || "0", 10);
+          const wait = retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, retryCount) * 1000;
+          apiRes.resume(); // drain body
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-          const data = trimmed.slice(6);
-          if (data === "[DONE]") {
-            res.write("data: [DONE]\n\n");
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.choices && parsed.choices[0]?.delta?.content) {
-              res.write(
-                `data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`,
-              );
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.warn(`Airforce API ${apiRes.statusCode}, retry ${retryCount}/${maxRetries} in ${wait}ms`);
+            setTimeout(attemptRequest, wait);
+          } else {
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ error: "AI service rate limited, please try again" })}\n\n`);
+              res.write("data: [DONE]\n\n");
+              res.end();
             }
-          } catch {
-            // Skip malformed JSON
           }
+          return;
         }
+
+        let apiBuffer = "";
+
+        apiRes.on("data", (chunk: Buffer) => {
+          apiBuffer += chunk.toString();
+          const lines = apiBuffer.split("\n");
+          apiBuffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+            const data = trimmed.slice(6);
+            if (data === "[DONE]") {
+              res.write("data: [DONE]\n\n");
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices && parsed.choices[0]?.delta?.content) {
+                res.write(
+                  `data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`,
+                );
+              }
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        });
+
+        apiRes.on("end", () => {
+          if (!res.writableEnded) {
+            res.write("data: [DONE]\n\n");
+            res.end();
+          }
+        });
+
+        apiRes.on("error", (err) => {
+          console.error("Airforce API response error:", err);
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: "AI service error" })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+          }
+        });
       });
 
-      apiRes.on("end", () => {
+      apiReq.on("error", (err) => {
+        console.error("Airforce API request error:", err);
         if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ error: "AI service connection error" })}\n\n`);
           res.write("data: [DONE]\n\n");
           res.end();
         }
       });
 
-      apiRes.on("error", (err) => {
-        console.error("Airforce API response error:", err);
-        if (!res.writableEnded) {
-          res.write(
-            `data: ${JSON.stringify({ error: "AI service error" })}\n\n`,
-          );
-          res.write("data: [DONE]\n\n");
-          res.end();
-        }
+      apiReq.write(requestBody);
+      apiReq.end();
+
+      res.on("close", () => {
+        apiReq.destroy();
       });
-    });
+    };
 
-    apiReq.on("error", (err) => {
-      console.error("Airforce API request error:", err);
-      if (!res.writableEnded) {
-        res.write(
-          `data: ${JSON.stringify({ error: "AI service connection error" })}\n\n`,
-        );
-        res.write("data: [DONE]\n\n");
-        res.end();
-      }
-    });
-
-    apiReq.write(requestBody);
-    apiReq.end();
-
-    res.on("close", () => {
-      apiReq.destroy();
-    });
+    attemptRequest();
   });
 
   // Agent API endpoint with SSE streaming - Full autonomous AI agent mode

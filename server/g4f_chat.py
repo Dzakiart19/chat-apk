@@ -11,6 +11,26 @@ import time
 import urllib.request
 import urllib.error
 
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if it exists (for local/APK builds)."""
+    env_path = os.path.join(os.getcwd(), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+_load_dotenv()
+
 AIRFORCE_API_URL = "https://api.airforce/v1/chat/completions"
 AIRFORCE_API_KEY = os.environ.get("AIRFORCE_API_KEY", "")
 

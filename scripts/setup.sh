@@ -167,9 +167,9 @@ install_pip_deps() {
     return 0
   fi
 
-  # All pip methods failed - check if packages are already available
+  # All pip methods failed - check if core packages are already available
   # (on Replit they're installed via Nix/packager, not pip directly)
-  if $python_cmd -c "import g4f, pydantic, aiohttp, requests" 2>/dev/null; then
+  if $python_cmd -c "import pydantic, requests" 2>/dev/null; then
     echo "Packages already available (installed via system packager)" >> "$PIP_LOG"
     return 0
   fi
@@ -197,10 +197,23 @@ verify_aiohttp() {
   if $python_cmd -c "import aiohttp" 2>/dev/null; then
     local ver
     ver=$($python_cmd -m pip show aiohttp 2>/dev/null | grep "^Version:" | awk '{print $2}') || ver="unknown"
-    print_success "aiohttp v${ver} installed (required by g4f)"
+    print_success "aiohttp v${ver} installed"
     return 0
   else
-    print_warning "aiohttp not found (g4f may have limited functionality)"
+    print_warning "aiohttp not found (optional, may be needed for some HTTP features)"
+    return 1
+  fi
+}
+
+verify_beautifulsoup4() {
+  local python_cmd="$1"
+  if $python_cmd -c "import bs4" 2>/dev/null; then
+    local ver
+    ver=$($python_cmd -m pip show beautifulsoup4 2>/dev/null | grep "^Version:" | awk '{print $2}') || ver="unknown"
+    print_success "beautifulsoup4 v${ver} installed (required for browser tool)"
+    return 0
+  else
+    print_warning "beautifulsoup4 not found (browser tool HTML parsing may be limited)"
     return 1
   fi
 }
@@ -362,14 +375,14 @@ main() {
   # Check tsx (TypeScript runner for backend)
   verify_tsx || verify_ok=false
 
-  # Check g4f with Yqcloud provider (free AI, no API key required)
-  verify_g4f "$python_cmd" || verify_ok=false
-
   # Check pydantic v2 (required for agent data models)
   verify_pydantic "$python_cmd" || verify_ok=false
 
-  # Check aiohttp (used by g4f internally) - warning only
+  # Check aiohttp - warning only
   verify_aiohttp "$python_cmd" || true
+
+  # Check beautifulsoup4 (required for browser tool HTML parsing)
+  verify_beautifulsoup4 "$python_cmd" || true
 
   echo ""
 
@@ -377,7 +390,7 @@ main() {
     print_error "Verification failed. Some dependencies may be missing."
     echo ""
     echo -e "  ${YELLOW}On Replit/NixOS, install Python packages via the Replit Packager${NC}"
-    echo -e "  or run: ${CYAN}pip install --break-system-packages g4f pydantic aiohttp requests${NC}"
+    echo -e "  or run: ${CYAN}pip install --break-system-packages pydantic beautifulsoup4 requests aiohttp${NC}"
     exit 1
   fi
 
@@ -392,9 +405,9 @@ main() {
   echo -e "    ${CYAN}npx --yes expo start --localhost${NC}      Start Expo dev server"
   echo ""
   echo -e "  ${BOLD}AI Configuration:${NC}"
-  echo -e "    Uses ${CYAN}gpt4free (g4f)${NC} by default - no API key required"
-  echo -e "    Provider: ${CYAN}Yqcloud${NC} | Models: mistral-small-24b, gpt-4o-mini"
-  echo -e "    To use OpenAI API: set ${CYAN}OPENAI_API_KEY${NC} environment variable"
+  echo -e "    Uses ${CYAN}Airforce API${NC} - set ${CYAN}AIRFORCE_API_KEY${NC} in ${CYAN}.env${NC} file"
+  echo -e "    Endpoint: ${CYAN}https://api.airforce/v1/chat/completions${NC}"
+  echo -e "    Models: ${CYAN}gpt-4o-mini${NC} (agent + chat)"
   echo ""
 }
 

@@ -23,6 +23,26 @@ import urllib.error
 from enum import Enum
 from typing import Optional, Dict, Any, List
 
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if it exists (for local/APK builds)."""
+    env_path = os.path.join(os.getcwd(), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+_load_dotenv()
+
 # Import tools
 from server.agent.tools.search import web_search, web_browse
 from server.agent.tools.shell import (
