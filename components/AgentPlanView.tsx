@@ -241,24 +241,6 @@ const styles = StyleSheet.create({
     color: "#E8E8ED",
     letterSpacing: -0.2,
   },
-  headerProgress: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: "#636366",
-  },
-  progressTrack: {
-    height: 2,
-    backgroundColor: "#222228",
-    marginHorizontal: 14,
-    borderRadius: 1,
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#6C5CE7",
-    borderRadius: 1,
-  },
   collapsedInfo: {
     paddingHorizontal: 14,
     paddingBottom: 10,
