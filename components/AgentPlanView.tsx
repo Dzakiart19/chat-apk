@@ -154,14 +154,18 @@ function StepCard({ step, isLast }: { step: AgentPlanStep; isLast: boolean }) {
 }
 
 export function AgentPlanView({ plan }: AgentPlanViewProps) {
+  const [collapsed, setCollapsed] = useState(false);
   const completedCount = plan.steps.filter((s) => s.status === "completed").length;
   const totalCount = plan.steps.length;
   const allDone = completedCount === totalCount && totalCount > 0;
-  const progress = totalCount > 0 ? completedCount / totalCount : 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.header}
+        onPress={() => setCollapsed(!collapsed)}
+        activeOpacity={0.7}
+      >
         <View style={[styles.headerDot, allDone && styles.headerDotDone]}>
           {allDone ? (
             <Ionicons name="checkmark" size={12} color="#FFFFFF" />
@@ -170,26 +174,34 @@ export function AgentPlanView({ plan }: AgentPlanViewProps) {
           )}
         </View>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {plan.title || "Executing Task"}
+          {plan.title || "Menjalankan tugas"}
         </Text>
-        <Text style={styles.headerProgress}>
-          {completedCount}/{totalCount}
-        </Text>
-      </View>
+        <Ionicons
+          name={collapsed ? "chevron-down" : "chevron-up"}
+          size={14}
+          color="#636366"
+        />
+      </TouchableOpacity>
 
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
+      {!collapsed && (
+        <View style={styles.stepsContainer}>
+          {plan.steps.map((step, index) => (
+            <StepCard
+              key={step.id || index}
+              step={step}
+              isLast={index === plan.steps.length - 1}
+            />
+          ))}
+        </View>
+      )}
 
-      <View style={styles.stepsContainer}>
-        {plan.steps.map((step, index) => (
-          <StepCard
-            key={step.id || index}
-            step={step}
-            isLast={index === plan.steps.length - 1}
-          />
-        ))}
-      </View>
+      {collapsed && (
+        <View style={styles.collapsedInfo}>
+          <Text style={styles.collapsedText}>
+            {completedCount}/{totalCount} langkah selesai
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -246,6 +258,15 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "#6C5CE7",
     borderRadius: 1,
+  },
+  collapsedInfo: {
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+  },
+  collapsedText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#636366",
   },
   stepsContainer: {
     paddingHorizontal: 14,

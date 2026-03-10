@@ -314,18 +314,18 @@ const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 16,
     paddingVertical: 2,
-    paddingLeft: 52,
+    paddingLeft: 44,
   },
   pill: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#141418",
-    borderRadius: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#222228",
+    borderColor: "#1E1E24",
   },
   pillCalling: {
     borderColor: "rgba(108, 92, 231, 0.3)",

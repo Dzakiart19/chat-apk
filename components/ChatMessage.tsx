@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bubbleWrapper: {
-    maxWidth: "80%",
+    maxWidth: "85%",
     alignItems: "flex-start",
   },
   bubbleWrapperUser: {
@@ -293,16 +293,16 @@ const styles = StyleSheet.create({
   },
   bubble: {
     borderRadius: 18,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
   userBubble: {
-    backgroundColor: "#6C5CE7",
+    backgroundColor: "#2A2A30",
     borderBottomRightRadius: 6,
   },
   aiBubble: {
-    backgroundColor: "#1A1A20",
-    borderBottomLeftRadius: 6,
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
   },
   messageText: {
     fontFamily: "Inter_400Regular",

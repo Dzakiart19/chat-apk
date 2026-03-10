@@ -19,9 +19,13 @@ interface ChatInputProps {
   onStop?: () => void;
   isGenerating?: boolean;
   placeholder?: string;
+  isAgentMode?: boolean;
+  onToggleMode?: () => void;
+  onShowHistory?: () => void;
+  showModeToggle?: boolean;
 }
 
-export function ChatInput({ onSend, disabled, onStop, isGenerating, placeholder }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, onStop, isGenerating, placeholder, isAgentMode, onToggleMode, showModeToggle }: ChatInputProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const inputRef = useRef<TextInput>(null);
@@ -91,63 +95,84 @@ export function ChatInput({ onSend, disabled, onStop, isGenerating, placeholder 
         </ScrollView>
       )}
 
-      <View style={styles.inputRow}>
-        <TouchableOpacity
-          onPress={handleAttach}
-          style={styles.attachButton}
-          activeOpacity={0.6}
-          disabled={disabled}
-        >
-          <Ionicons
-            name="add-circle-outline"
-            size={26}
-            color={disabled ? "#3A3A40" : "#8E8E93"}
-          />
-        </TouchableOpacity>
+      {/* Input area */}
+      <View style={styles.inputWrapper}>
+        <TextInput
+          ref={inputRef}
+          style={styles.input}
+          placeholder={placeholder || "Kirim pesan ke Dzeck AI..."}
+          placeholderTextColor="#636366"
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={4000}
+          editable={!disabled}
+          onSubmitEditing={Platform.OS === "web" ? handleSend : undefined}
+          blurOnSubmit={false}
+        />
+      </View>
 
-        <View style={styles.inputWrapper}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder={placeholder || "Message Dzeck AI..."}
-            placeholderTextColor="#636366"
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={4000}
-            editable={!disabled}
-            onSubmitEditing={Platform.OS === "web" ? handleSend : undefined}
-            blurOnSubmit={false}
-          />
+      {/* Bottom toolbar - Manus style */}
+      <View style={styles.toolbar}>
+        <View style={styles.toolbarLeft}>
+          <TouchableOpacity
+            onPress={handleAttach}
+            style={styles.toolbarBtn}
+            activeOpacity={0.6}
+            disabled={disabled}
+          >
+            <Ionicons
+              name="add"
+              size={22}
+              color={disabled ? "#3A3A40" : "#8E8E93"}
+            />
+          </TouchableOpacity>
+
+          {showModeToggle && (
+            <TouchableOpacity
+              onPress={onToggleMode}
+              style={styles.toolbarBtn}
+              activeOpacity={0.6}
+              disabled={disabled || isGenerating}
+            >
+              <Ionicons
+                name={isAgentMode ? "flash" : "git-branch-outline"}
+                size={20}
+                color={isAgentMode ? "#6C5CE7" : "#8E8E93"}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {isGenerating ? (
-          <TouchableOpacity
-            onPress={onStop}
-            style={styles.sendButton}
-            activeOpacity={0.6}
-          >
-            <View style={styles.stopIcon}>
-              <Ionicons name="stop" size={16} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={handleSend}
-            style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-            activeOpacity={0.6}
-            disabled={!canSend}
-          >
-            <View
-              style={[
-                styles.sendIconContainer,
-                !canSend && styles.sendIconDisabled,
-              ]}
+        <View style={styles.toolbarRight}>
+          {isGenerating ? (
+            <TouchableOpacity
+              onPress={onStop}
+              style={styles.toolbarBtn}
+              activeOpacity={0.6}
             >
-              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-        )}
+              <View style={styles.stopIcon}>
+                <Ionicons name="stop" size={14} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={handleSend}
+              style={[styles.toolbarBtn, !canSend && styles.sendButtonDisabled]}
+              activeOpacity={0.6}
+              disabled={!canSend}
+            >
+              <View
+                style={[
+                  styles.sendIconContainer,
+                  !canSend && styles.sendIconDisabled,
+                ]}
+              >
+                <Ionicons name="arrow-up" size={16} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -155,19 +180,16 @@ export function ChatInput({ onSend, disabled, onStop, isGenerating, placeholder 
 
 const styles = StyleSheet.create({
   container: {
-    borderTopWidth: 1,
-    borderTopColor: "#1E1E24",
     backgroundColor: "#0A0A0C",
     paddingBottom: Platform.OS === "ios" ? 20 : 8,
+    paddingHorizontal: 12,
   },
   attachmentBar: {
     maxHeight: 80,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E1E24",
+    marginBottom: 4,
   },
   attachmentBarContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 4,
     gap: 8,
   },
   attachmentPreview: {
@@ -186,26 +208,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#0A0A0C",
     borderRadius: 9,
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    gap: 6,
-  },
-  attachButton: {
-    padding: 4,
-    marginBottom: 4,
-  },
   inputWrapper: {
-    flex: 1,
     backgroundColor: "#1A1A20",
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#2C2C30",
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 10 : 6,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
     maxHeight: 120,
+    marginBottom: 6,
   },
   input: {
     fontFamily: "Inter_400Regular",
@@ -214,17 +225,35 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     lineHeight: 20,
   },
-  sendButton: {
-    padding: 4,
-    marginBottom: 4,
+  toolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toolbarLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  toolbarRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  toolbarBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
   },
   sendButtonDisabled: {
     opacity: 0.4,
   },
   sendIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#6C5CE7",
     alignItems: "center",
     justifyContent: "center",
@@ -233,9 +262,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#2C2C30",
   },
   stopIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#FF453A",
     alignItems: "center",
     justifyContent: "center",
