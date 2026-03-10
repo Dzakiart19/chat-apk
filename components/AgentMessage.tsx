@@ -1,73 +1,44 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AgentPlanView } from "@/components/AgentPlanView";
-import { AgentToolView } from "@/components/AgentToolView";
-import { AgentThinking } from "@/components/AgentThinking";
 import type { AgentEvent } from "@/lib/chat";
 
 interface AgentMessageProps {
   event: AgentEvent;
 }
 
+function StreamingCursor() {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    ).start();
+    return () => opacity.stopAnimation();
+  }, [opacity]);
+
+  return (
+    <Animated.Text style={[styles.cursor, { opacity }]}>▋</Animated.Text>
+  );
+}
+
 export function AgentMessage({ event }: AgentMessageProps) {
   switch (event.type) {
-    case "thinking":
-      return (
-        <View style={styles.container}>
-          <AgentThinking thinking={event.thinking || event.content || "Thinking..."} />
-        </View>
-      );
-
-    case "plan":
-      if (event.plan) {
-        return (
-          <View style={styles.container}>
-            <AgentPlanView plan={event.plan} />
-          </View>
-        );
-      }
-      return null;
-
-    case "step":
-      if (event.step) {
-        return (
-          <View style={styles.container}>
-            <View style={styles.stepEvent}>
-              <StepStatusBadge status={event.status || ""} />
-              <Text style={styles.stepText} numberOfLines={2}>
-                {event.step.description}
-              </Text>
-            </View>
-          </View>
-        );
-      }
-      return null;
-
-    case "tool":
-      return (
-        <View style={styles.container}>
-          <AgentToolView
-            toolName={event.tool_name || ""}
-            functionName={event.function_name || ""}
-            functionArgs={event.function_args || {}}
-            status={event.status || ""}
-            toolContent={event.tool_content}
-            functionResult={event.function_result}
-          />
-        </View>
-      );
-
     case "message":
+      if (!event.message && !event.isStreaming) return null;
       return (
         <View style={styles.container}>
-          <View style={styles.messageContainer}>
+          <View style={styles.messageRow}>
             <View style={styles.avatar}>
-              <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+              <Ionicons name="sparkles" size={13} color="#FFFFFF" />
             </View>
-            <View style={styles.messageBubble}>
+            <View style={styles.bubble}>
               <Text style={styles.messageText} selectable>
                 {event.message || ""}
+                {event.isStreaming ? <StreamingCursor /> : null}
               </Text>
             </View>
           </View>
@@ -77,9 +48,11 @@ export function AgentMessage({ event }: AgentMessageProps) {
     case "title":
       return (
         <View style={styles.container}>
-          <View style={styles.titleContainer}>
-            <Ionicons name="rocket" size={16} color="#6C5CE7" />
-            <Text style={styles.titleText}>{event.title || "Task"}</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="rocket" size={15} color="#6C5CE7" />
+            <Text style={styles.titleText} numberOfLines={2}>
+              {event.title || ""}
+            </Text>
           </View>
         </View>
       );
@@ -87,56 +60,13 @@ export function AgentMessage({ event }: AgentMessageProps) {
     case "error":
       return (
         <View style={styles.container}>
-          <View style={styles.errorContainer}>
+          <View style={styles.errorRow}>
             <Ionicons name="alert-circle" size={14} color="#FF453A" />
-            <Text style={styles.errorText}>{event.error || "Unknown error"}</Text>
+            <Text style={styles.errorText}>{event.error || "An error occurred"}</Text>
           </View>
         </View>
       );
 
-    case "wait":
-      return (
-        <View style={styles.container}>
-          <View style={styles.waitContainer}>
-            <Ionicons name="hourglass" size={14} color="#FF9F0A" />
-            <Text style={styles.waitText}>
-              {event.prompt || "Waiting for input..."}
-            </Text>
-          </View>
-        </View>
-      );
-
-    case "done":
-      return null;
-
-    default:
-      return null;
-  }
-}
-
-function StepStatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "running":
-      return (
-        <View style={[styles.badge, styles.badgeRunning]}>
-          <Ionicons name="play" size={10} color="#6C5CE7" />
-          <Text style={[styles.badgeText, styles.badgeTextRunning]}>Running</Text>
-        </View>
-      );
-    case "completed":
-      return (
-        <View style={[styles.badge, styles.badgeCompleted]}>
-          <Ionicons name="checkmark" size={10} color="#30D158" />
-          <Text style={[styles.badgeText, styles.badgeTextCompleted]}>Done</Text>
-        </View>
-      );
-    case "failed":
-      return (
-        <View style={[styles.badge, styles.badgeFailed]}>
-          <Ionicons name="close" size={10} color="#FF453A" />
-          <Text style={[styles.badgeText, styles.badgeTextFailed]}>Failed</Text>
-        </View>
-      );
     default:
       return null;
   }
@@ -145,122 +75,73 @@ function StepStatusBadge({ status }: { status: string }) {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 2,
-  },
-  stepEvent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-  },
-  stepText: {
-    flex: 1,
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: "#A0A0A8",
-    lineHeight: 18,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 10,
   },
-  badgeRunning: {
-    backgroundColor: "rgba(108, 92, 231, 0.12)",
-  },
-  badgeCompleted: {
-    backgroundColor: "rgba(48, 209, 88, 0.12)",
-  },
-  badgeFailed: {
-    backgroundColor: "rgba(255, 69, 58, 0.12)",
-  },
-  badgeText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 10,
-  },
-  badgeTextRunning: {
-    color: "#6C5CE7",
-  },
-  badgeTextCompleted: {
-    color: "#30D158",
-  },
-  badgeTextFailed: {
-    color: "#FF453A",
-  },
-  messageContainer: {
+  messageRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    gap: 10,
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "#6C5CE7",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+    marginTop: 1,
   },
-  messageBubble: {
+  bubble: {
     flex: 1,
-    backgroundColor: "#1A1A20",
-    borderRadius: 18,
-    borderBottomLeftRadius: 6,
-    paddingHorizontal: 16,
+    backgroundColor: "#141418",
+    borderRadius: 16,
+    borderBottomLeftRadius: 5,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#222228",
   },
   messageText: {
     fontFamily: "Inter_400Regular",
     fontSize: 15,
     color: "#E8E8ED",
-    lineHeight: 22,
+    lineHeight: 23,
+    letterSpacing: -0.1,
   },
-  titleContainer: {
+  cursor: {
+    color: "#6C5CE7",
+    fontSize: 14,
+  },
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 4,
+    paddingLeft: 4,
   },
   titleText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 18,
+    fontSize: 17,
     color: "#FFFFFF",
+    letterSpacing: -0.3,
+    flex: 1,
   },
-  errorContainer: {
+  errorRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 69, 58, 0.08)",
+    gap: 8,
+    backgroundColor: "rgba(255,69,58,0.07)",
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(255, 69, 58, 0.15)",
+    borderColor: "rgba(255,69,58,0.12)",
   },
   errorText: {
     flex: 1,
     fontFamily: "Inter_400Regular",
     fontSize: 13,
     color: "#FF6B6B",
-    lineHeight: 18,
-  },
-  waitContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 159, 10, 0.08)",
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255, 159, 10, 0.15)",
-  },
-  waitText: {
-    flex: 1,
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: "#FF9F0A",
     lineHeight: 18,
   },
 });

@@ -81,6 +81,9 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef<string>(Date.now().toString());
+  const streamingMsgIdRef = useRef<string | null>(null);
+  const currentStepIdRef = useRef<string | null>(null);
+  const planViewAddedRef = useRef<boolean>(false);
 
   const scrollToBottom = useCallback((animated = true) => {
     setTimeout(
@@ -222,6 +225,9 @@ export default function ChatScreen() {
       if (isGenerating) return;
 
       sessionIdRef.current = Date.now().toString();
+      streamingMsgIdRef.current = null;
+      currentStepIdRef.current = null;
+      planViewAddedRef.current = false;
 
       const userItem: ChatListItem = {
         kind: "chat",
@@ -236,7 +242,7 @@ export default function ChatScreen() {
       setAgentEvents((prev) => [...prev, userItem]);
       setIsGenerating(true);
       setCurrentPlan(null);
-      setAgentStatus({ label: "Thinking..." });
+      setAgentStatus({ label: "Planning..." });
       scrollToBottom();
 
       const controller = new AbortController();
@@ -246,94 +252,170 @@ export default function ChatScreen() {
         const apiUrl = getApiUrl();
         let eventCounter = 0;
 
-        for await (const event of streamAgent(
-          text,
-          apiUrl,
-          controller.signal,
-        )) {
+        for await (const event of streamAgent(text, apiUrl, controller.signal)) {
           eventCounter++;
           const eventId = `evt-${Date.now()}-${eventCounter}`;
 
-          // Update live plan state
-          if (event.type === "plan" && event.plan) {
-            setCurrentPlan(event.plan);
-            if (event.status === "running") {
-              setAgentStatus({ label: "Executing plan..." });
+          // ── Plan events: update plan state, inject plan_view into feed once ──
+          if (event.type === "plan") {
+            if (event.plan) {
+              if (!planViewAddedRef.current) {
+                planViewAddedRef.current = true;
+                setAgentEvents((prev) => [
+                  ...prev,
+                  { kind: "plan_view", id: "plan-view" },
+                ]);
+              }
+              setCurrentPlan((prev) => {
+                const incoming = event.plan!;
+                if (!prev) return incoming;
+                return {
+                  ...incoming,
+                  steps: incoming.steps.map((s) => {
+                    const old = prev.steps.find((p) => p.id === s.id);
+                    return old ? { ...s, tools: old.tools } : s;
+                  }),
+                };
+              });
             }
+            if (event.status === "running") {
+              setAgentStatus({ label: "Executing..." });
+            } else if (event.status === "creating") {
+              setAgentStatus({ label: "Planning..." });
+            }
+            continue;
           }
 
-          // Update live step status within plan
+          // ── Step events: track current step, update plan ──
           if (event.type === "step" && event.step) {
+            if (event.status === "running") {
+              currentStepIdRef.current = event.step.id;
+              setAgentStatus({ label: event.step.description });
+            }
             setCurrentPlan((prev) => {
               if (!prev) return prev;
               return {
                 ...prev,
                 steps: prev.steps.map((s) =>
-                  s.id === event.step?.id ? { ...s, ...event.step } : s,
+                  s.id === event.step?.id
+                    ? { ...s, ...event.step, tools: s.tools }
+                    : s,
                 ),
               };
             });
-            if (event.status === "running") {
-              setAgentStatus({
-                label: `Running: ${event.step.description}`,
-              });
-            }
+            continue;
           }
 
-          // Track active tool for status bar
+          // ── Tool events: track inside current step (not in feed) ──
           if (event.type === "tool") {
+            const stepId = currentStepIdRef.current;
             if (event.status === "calling") {
               setAgentStatus({
                 label: event.function_name || "Using tool",
                 toolName: event.tool_name,
                 functionName: event.function_name,
               });
-            } else if (event.status === "called") {
-              setAgentStatus({ label: "Processing result..." });
-            }
-
-            const toolCallId = event.tool_call_id;
-            if (event.status === "calling") {
-              setAgentEvents((prev) => [
-                ...prev,
-                { kind: "agent", data: event, id: eventId },
-              ]);
-            } else if (
-              event.status === "called" ||
-              event.status === "error"
-            ) {
-              setAgentEvents((prev) => {
-                const existingIdx = prev.findIndex(
-                  (item) =>
-                    item.kind === "agent" &&
-                    item.data.type === "tool" &&
-                    item.data.tool_call_id === toolCallId &&
-                    item.data.status === "calling",
-                );
-                if (existingIdx >= 0) {
-                  const updated = [...prev];
-                  updated[existingIdx] = { ...updated[existingIdx], data: event };
-                  return updated;
-                }
-                return [...prev, { kind: "agent", data: event, id: eventId }];
-              });
+              if (stepId) {
+                setCurrentPlan((prev) => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === stepId
+                        ? { ...s, tools: [...(s.tools || []), event] }
+                        : s,
+                    ),
+                  };
+                });
+              }
+            } else if (event.status === "called" || event.status === "error") {
+              setAgentStatus({ label: "Processing..." });
+              if (stepId) {
+                setCurrentPlan((prev) => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    steps: prev.steps.map((s) => {
+                      if (s.id !== stepId) return s;
+                      const tools = s.tools || [];
+                      const idx = tools.findIndex(
+                        (t) =>
+                          t.tool_call_id === event.tool_call_id &&
+                          t.status === "calling",
+                      );
+                      if (idx >= 0) {
+                        const updated = [...tools];
+                        updated[idx] = event;
+                        return { ...s, tools: updated };
+                      }
+                      return { ...s, tools: [...tools, event] };
+                    }),
+                  };
+                });
+              }
             }
             scrollToBottom();
             continue;
           }
 
-          // Filter and display relevant events
+          // ── Streaming final message ──
+          if (event.type === "message_start") {
+            const msgId = `stream-${Date.now()}`;
+            streamingMsgIdRef.current = msgId;
+            setAgentEvents((prev) => [
+              ...prev,
+              {
+                kind: "agent",
+                data: { type: "message", message: "", isStreaming: true },
+                id: msgId,
+              },
+            ]);
+            scrollToBottom();
+            continue;
+          }
+
+          if (event.type === "message_chunk") {
+            const msgId = streamingMsgIdRef.current;
+            if (msgId) {
+              setAgentEvents((prev) =>
+                prev.map((item) =>
+                  item.id === msgId && item.kind === "agent"
+                    ? {
+                        ...item,
+                        data: {
+                          ...item.data,
+                          message:
+                            (item.data.message || "") + (event.chunk || ""),
+                        },
+                      }
+                    : item,
+                ),
+              );
+              scrollToBottom();
+            }
+            continue;
+          }
+
+          if (event.type === "message_end") {
+            const msgId = streamingMsgIdRef.current;
+            if (msgId) {
+              setAgentEvents((prev) =>
+                prev.map((item) =>
+                  item.id === msgId && item.kind === "agent"
+                    ? { ...item, data: { ...item.data, isStreaming: false } }
+                    : item,
+                ),
+              );
+              streamingMsgIdRef.current = null;
+            }
+            continue;
+          }
+
+          // ── Visible events: message (plan intro) and errors ──
           const shouldShow =
-            event.type === "message" ||
-            event.type === "title" ||
-            event.type === "thinking" ||
-            event.type === "error" ||
-            event.type === "wait";
+            event.type === "message" || event.type === "error";
 
           if (shouldShow) {
-            if (event.type === "thinking") {
-              setAgentStatus({ label: event.content || "Thinking..." });
-            }
             setAgentEvents((prev) => [
               ...prev,
               { kind: "agent", data: event, id: eventId },
@@ -394,6 +476,9 @@ export default function ChatScreen() {
     setCurrentPlan(null);
     setAgentStatus(null);
     sessionIdRef.current = Date.now().toString();
+    streamingMsgIdRef.current = null;
+    currentStepIdRef.current = null;
+    planViewAddedRef.current = false;
   }, [isGenerating]);
 
   const toggleMode = useCallback(() => {
@@ -434,15 +519,25 @@ export default function ChatScreen() {
       if (item.kind === "chat") {
         return <ChatMessageBubble message={item.data} />;
       }
+      if (item.kind === "plan_view") {
+        return currentPlan ? (
+          <View style={styles.planSection}>
+            <AgentPlanView plan={currentPlan} />
+          </View>
+        ) : null;
+      }
       return <AgentMessage event={item.data} />;
     },
-    [],
+    [currentPlan],
   );
 
   const chatKeyExtractor = useCallback((item: ChatMessage) => item.id, []);
   const agentKeyExtractor = useCallback(
-    (item: ChatListItem) =>
-      item.kind === "chat" ? item.data.id : item.id,
+    (item: ChatListItem) => {
+      if (item.kind === "chat") return item.data.id;
+      if (item.kind === "plan_view") return item.id;
+      return item.id;
+    },
     [],
   );
 
@@ -458,14 +553,6 @@ export default function ChatScreen() {
 
   const suggestions = isAgentMode ? AGENT_SUGGESTIONS : CHAT_SUGGESTIONS;
 
-  const AgentListHeader = useCallback(() => {
-    if (!currentPlan) return null;
-    return (
-      <View style={styles.planSection}>
-        <AgentPlanView plan={currentPlan} />
-      </View>
-    );
-  }, [currentPlan]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -612,7 +699,6 @@ export default function ChatScreen() {
             style={styles.messageList}
             contentContainerStyle={styles.messageListContent}
             showsVerticalScrollIndicator={false}
-            ListHeaderComponent={AgentListHeader}
             ListFooterComponent={
               isGenerating ? (
                 <View style={styles.agentFooter}>

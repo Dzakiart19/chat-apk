@@ -465,6 +465,19 @@ def emit_event(event_type: str, **data: Any) -> None:
     sys.stdout.flush()
 
 
+def emit_streaming_message(text: str, role: str = "assistant") -> None:
+    """Emit a message word-by-word for smooth streaming effect."""
+    if not text or not text.strip():
+        return
+    emit_event("message_start", role=role)
+    words = text.split(" ")
+    for i, word in enumerate(words):
+        chunk = word if i == 0 else " " + word
+        emit_event("message_chunk", chunk=chunk, role=role)
+        time.sleep(0.012)
+    emit_event("message_end", role=role)
+
+
 def call_cf_api(
     messages: list,
     tools: Optional[List[Dict[str, Any]]] = None,
@@ -541,7 +554,6 @@ def call_text_with_retry(
             last_error = e
             if e.code == 429 or e.code >= 500:
                 wait = 2 ** attempt
-                emit_event("thinking", content="Retrying in {}s...".format(wait))
                 time.sleep(wait)
             else:
                 raise
@@ -568,7 +580,6 @@ def call_api_with_retry(
             last_error = e
             if e.code == 429 or e.code >= 500:
                 wait = 2 ** attempt
-                emit_event("thinking", content="Retrying in {}s...".format(wait))
                 time.sleep(wait)
             else:
                 raise
@@ -775,7 +786,6 @@ class DzeckAgent:
                     attachments: Optional[List[str]] = None) -> Plan:
         """Create a plan from the user's message."""
         self.state = FlowState.PLANNING
-        emit_event("thinking", content="Analyzing your request...")
 
         language = self._detect_language(user_message)
 
@@ -850,8 +860,6 @@ class DzeckAgent:
             status_enum = (StepStatus.COMPLETED if step.success
                            else StepStatus.FAILED)
             emit_event("step", status=status_enum.value, step=step.to_dict())
-            if step.result:
-                emit_event("message", message=step.result, role="assistant")
             return "STEP_DONE"
 
         resolved = resolve_tool_name(fn_name)
@@ -872,12 +880,6 @@ class DzeckAgent:
 
         tool_result = execute_tool(resolved, fn_args)
         tool_content = build_tool_content(resolved, tool_result)
-
-        if resolved == "message_notify_user":
-            emit_event("message", message=fn_args.get("text", ""), role="assistant")
-        elif resolved == "message_ask_user":
-            emit_event("wait", prompt=fn_args.get("text", ""))
-            emit_event("message", message=fn_args.get("text", ""), role="assistant")
 
         result_status = (ToolStatus.CALLED if tool_result.success
                          else ToolStatus.ERROR)
@@ -995,16 +997,9 @@ class DzeckAgent:
                                        else StepStatus.FAILED)
                         emit_event("step", status=status_enum.value,
                                    step=step.to_dict())
-                        if step.result:
-                            emit_event("message", message=step.result,
-                                       role="assistant")
                         return
 
                     if parsed.get("thinking"):
-                        thinking_text = str(parsed["thinking"])
-                        # Only show clean, user-friendly thinking (not raw JSON)
-                        if len(thinking_text) < 200 and not thinking_text.strip().startswith("{"):
-                            emit_event("thinking", content=thinking_text)
                         exec_messages.append(
                             {"role": "assistant", "content": text})
                         exec_messages.append(
@@ -1047,19 +1042,12 @@ class DzeckAgent:
                             self.memory.compact()
                         continue
 
-                    # Only forward clean natural-language messages (not JSON)
-                    if parsed.get("message"):
-                        msg_text = parsed["message"]
-                        emit_event("message", message=msg_text, role="assistant")
-
                 # No tool call, no actionable JSON → step complete
                 step.status = ExecutionStatus.COMPLETED
                 step.success = True
                 step.result = text[:500] if text else "Step completed"
                 emit_event("step", status=StepStatus.COMPLETED.value,
                            step=step.to_dict())
-                if text and not text.strip().startswith("{"):
-                    emit_event("message", message=text[:2000], role="assistant")
                 return
 
             except Exception as e:
@@ -1171,25 +1159,20 @@ class DzeckAgent:
             parsed = self._parse_response(response_text)
 
             if parsed and parsed.get("message"):
-                emit_event(
-                    "message", message=parsed["message"],
-                    role="assistant",
-                    attachments=parsed.get("attachments", []))
+                emit_streaming_message(str(parsed["message"])[:4000])
             else:
-                # Emit plain text summary only — no raw JSON to user
                 clean = response_text.strip()
                 if clean and not clean.startswith("{"):
-                    emit_event("message", message=clean[:2000], role="assistant")
+                    emit_streaming_message(clean[:4000])
                 elif parsed:
-                    # Try to extract any meaningful text from parsed JSON
                     summary = (parsed.get("summary") or parsed.get("result")
                                or parsed.get("text") or "Task completed.")
-                    emit_event("message", message=str(summary)[:2000], role="assistant")
+                    emit_streaming_message(str(summary)[:4000])
                 else:
-                    emit_event("message", message="Task completed.", role="assistant")
+                    emit_streaming_message("Task completed.")
 
         except Exception as e:
-            emit_event("message", message="Task completed.", role="assistant")
+            emit_streaming_message("Task completed.")
 
     def _is_simple_query(self, user_message: str) -> bool:
         """Detect if the user message is a simple query that doesn't need tools."""
@@ -1265,17 +1248,14 @@ class DzeckAgent:
         try:
             response_text = call_text_with_retry(messages)
             if response_text:
-                # Never forward raw JSON as a message
                 clean = response_text.strip()
                 if clean.startswith("{") or clean.startswith("["):
                     parsed = self._parse_response(clean)
                     clean = (parsed.get("message") or parsed.get("response")
                              or parsed.get("text") or "Hello! How can I help you?")
-                emit_event("message", message=clean[:4000], role="assistant")
+                emit_streaming_message(clean[:4000])
             else:
-                emit_event("message",
-                           message="I'm sorry, I couldn't generate a response.",
-                           role="assistant")
+                emit_streaming_message("I'm sorry, I couldn't generate a response.")
         except Exception as e:
             emit_event("error", error="Response error: {}".format(e))
 

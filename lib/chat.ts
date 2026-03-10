@@ -65,6 +65,7 @@ export interface AgentPlanStep {
   error?: string;
   success?: boolean;
   attachments?: string[];
+  tools?: AgentEvent[];
 }
 
 export interface AgentPlan {
@@ -98,6 +99,9 @@ export type AgentEventType =
   | "step"
   | "tool"
   | "message"
+  | "message_start"
+  | "message_chunk"
+  | "message_end"
   | "error"
   | "done"
   | "title"
@@ -137,6 +141,9 @@ export interface AgentEvent {
   // Additional details
   details?: string;
   attachments?: string[];
+  // Streaming message fields
+  chunk?: string;
+  isStreaming?: boolean;
 }
 
 /**
@@ -219,4 +226,5 @@ export interface ChatAttachment {
 
 export type ChatListItem =
   | { kind: "chat"; data: ChatMessage }
-  | { kind: "agent"; data: AgentEvent; id: string };
+  | { kind: "agent"; data: AgentEvent; id: string }
+  | { kind: "plan_view"; id: string };
