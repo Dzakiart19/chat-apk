@@ -56,7 +56,14 @@ def call_api(messages: list, model: str = "gpt-4o-mini") -> dict:
     )
 
     with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read().decode("utf-8")
+
+    # Detect plain-text rate limit (API returns HTTP 200 with "Ratelimit" body)
+    if raw.lstrip().startswith("Ratelimit") or "Ratelimit Exceeded" in raw:
+        raise urllib.error.HTTPError(
+            AIRFORCE_API_URL, 429, "Rate limit exceeded", {}, None)
+
+    return json.loads(raw)
 
 
 def call_api_with_retry(messages: list, model: str = "gpt-4o-mini", max_retries: int = 5) -> dict:

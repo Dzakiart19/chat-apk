@@ -101,10 +101,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             try {
               const parsed = JSON.parse(data);
-              if (parsed.choices && parsed.choices[0]?.delta?.content) {
-                res.write(
-                  `data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`,
-                );
+              const content = parsed.choices?.[0]?.delta?.content
+                ?? parsed.content
+                ?? "";
+
+              // Detect rate limit in stream content — retry instead of forwarding
+              if (content && (content.includes("Ratelimit") || content.includes("ratelimit"))) {
+                apiRes.destroy();
+                if (retryCount < maxRetries) {
+                  retryCount++;
+                  const wait = Math.pow(2, retryCount) * 1000;
+                  console.warn(`Rate limit in stream, retry ${retryCount}/${maxRetries} in ${wait}ms`);
+                  setTimeout(attemptRequest, wait);
+                } else {
+                  if (!res.writableEnded) {
+                    res.write(`data: ${JSON.stringify({ error: "AI service rate limited, please try again later" })}\n\n`);
+                    res.write("data: [DONE]\n\n");
+                    res.end();
+                  }
+                }
+                return;
+              }
+
+              if (content) {
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
               }
             } catch {
               // Skip malformed JSON

@@ -261,7 +261,14 @@ def call_airforce_api(
     )
 
     with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read().decode("utf-8")
+
+    # Detect plain-text rate limit responses (API returns HTTP 200 with body text)
+    if raw.lstrip().startswith("Ratelimit") or "Ratelimit Exceeded" in raw:
+        raise urllib.error.HTTPError(
+            AIRFORCE_API_URL, 429, "Rate limit exceeded", {}, None)
+
+    return json.loads(raw)
 
 
 def call_airforce_text(
@@ -273,7 +280,12 @@ def call_airforce_text(
     result = call_airforce_api(messages, model,
                                response_format=response_format)
     if "choices" in result and result["choices"]:
-        return result["choices"][0]["message"].get("content") or ""
+        content = result["choices"][0]["message"].get("content") or ""
+        # Guard: treat inline rate limit text as an error so retry kicks in
+        if "Ratelimit Exceeded" in content or content.startswith("Ratelimit"):
+            raise urllib.error.HTTPError(
+                AIRFORCE_API_URL, 429, "Rate limit exceeded", {}, None)
+        return content
     return ""
 
 
@@ -1010,6 +1022,19 @@ class DzeckAgent:
             for pattern in simple_patterns:
                 if re.search(pattern, msg):
                     return True
+
+        # Detect math / calculation questions (answer directly, no tools needed)
+        # Examples: "berapa 2+2?", "hitung 5*6", "what is 100/4", "123 * 456"
+        math_patterns = [
+            r"^berapa\s+[\d\s\+\-\*\/\(\)\.]+\??$",
+            r"^hitung\s+[\d\s\+\-\*\/\(\)\.]+\??$",
+            r"^calculate\s+[\d\s\+\-\*\/\(\)\.]+\??$",
+            r"^what is\s+[\d\s\+\-\*\/\(\)\.]+\??$",
+            r"^\d[\d\s\+\-\*\/\(\)\.]+\=?\??$",  # pure math expression
+        ]
+        for pattern in math_patterns:
+            if re.search(pattern, msg):
+                return True
 
         # Detect simple knowledge questions (no tool needed)
         knowledge_starters = [
