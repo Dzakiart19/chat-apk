@@ -82,16 +82,38 @@ class PlaywrightSession:
 
             from playwright.sync_api import sync_playwright
             self._pw = sync_playwright().start()
-            self._browser = self._pw.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-extensions",
-                    "--disable-background-networking",
-                ],
-            )
+
+            # Try non-headless when virtual display (Xvfb :99) is available
+            # This allows VNC streaming to show the live browser.
+            # Fall back to headless if headed mode fails.
+            display = os.environ.get("DISPLAY", "")
+            use_headed = bool(display)
+
+            launch_args = [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+            ]
+
+            if use_headed:
+                logger.info("[Browser] Display %s detected, attempting headed mode for VNC", display)
+                try:
+                    self._browser = self._pw.chromium.launch(
+                        headless=False,
+                        args=launch_args,
+                    )
+                    logger.info("[Browser] Headed Chromium started (VNC streaming active)")
+                except Exception as headed_err:
+                    logger.warning("[Browser] Headed mode failed (%s), falling back to headless", headed_err)
+                    use_headed = False
+
+            if not use_headed:
+                launch_args.append("--disable-gpu")
+                self._browser = self._pw.chromium.launch(
+                    headless=True,
+                    args=launch_args,
+                )
+                logger.info("[Browser] Headless Chromium started (screenshot mode)")
             ctx = self._browser.new_context(
                 viewport={"width": 1280, "height": 720},
                 user_agent=(

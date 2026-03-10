@@ -8,161 +8,142 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#f5f5f5;
-      --bg-dark:#0d0d0f;
+      --bg:#edebe3;
       --surface:#ffffff;
-      --surface2:#f7f7f8;
-      --surface3:#efefef;
-      --border:#e5e5e7;
-      --border2:#d1d1d6;
-      --accent:#1a73e8;
-      --accent2:#4285f4;
-      --text:#1c1c1e;
-      --text2:#3c3c43;
-      --muted:#8e8e93;
-      --muted2:#6c6c70;
-      --user-bubble:#f0f0f0;
-      --ai-icon-bg:#1a1a2e;
-      --success:#34c759;
-      --error:#ff3b30;
-      --warning:#ff9500;
-      --pill-bg:#f2f2f7;
-      --pill-border:#e5e5ea;
-      --shadow:0 1px 3px rgba(0,0,0,.08),0 0 1px rgba(0,0,0,.04);
-      --shadow-lg:0 8px 32px rgba(0,0,0,.08),0 0 1px rgba(0,0,0,.06);
+      --surface2:#f5f3ee;
+      --surface3:#ece9e1;
+      --border:#ddd9d0;
+      --border2:#ccc8be;
+      --text:#1a1916;
+      --text2:#4a4740;
+      --muted:#8a8780;
+      --muted2:#6a6762;
+      --accent:#2563eb;
+      --accent2:#3b82f6;
+      --user-bubble:#ffffff;
+      --ai-icon-bg:#1a1916;
+      --success:#16a34a;
+      --error:#dc2626;
+      --warning:#d97706;
+      --pill-bg:#f0ede7;
+      --pill-border:#ddd9d0;
+      --shadow:0 1px 4px rgba(0,0,0,.08),0 0 1px rgba(0,0,0,.04);
+      --shadow-md:0 4px 16px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.04);
+      --shadow-lg:0 8px 32px rgba(0,0,0,.1),0 2px 8px rgba(0,0,0,.06);
+      --radius:12px;
     }
-    @media(prefers-color-scheme:dark){
-      :root{
-        --bg:#0d0d0f;
-        --surface:#1c1c1e;
-        --surface2:#2c2c2e;
-        --surface3:#3a3a3c;
-        --border:#2c2c2e;
-        --border2:#3a3a3c;
-        --text:#f2f2f7;
-        --text2:#aeaeb2;
-        --muted:#636366;
-        --muted2:#48484a;
-        --user-bubble:#1c1c2e;
-        --pill-bg:#2c2c2e;
-        --pill-border:#3a3a3c;
-        --shadow:0 1px 3px rgba(0,0,0,.4),0 0 1px rgba(0,0,0,.3);
-        --shadow-lg:0 8px 32px rgba(0,0,0,.4),0 0 1px rgba(0,0,0,.3);
-      }
-    }
-    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6;overflow:hidden}
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;font-size:14px;line-height:1.6;overflow:hidden}
 
-    /* ── Split Layout ── */
+    /* ── App Shell ── */
     #app{display:flex;height:100dvh;position:relative;overflow:hidden}
-    #chat-side{flex:1;display:flex;flex-direction:column;min-width:0;transition:flex .25s ease;height:100%}
-    #tool-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100%}
-    #tool-panel.open{width:50%;min-width:320px}
-    @media(max-width:700px){
-      #tool-panel.open{position:fixed;inset:0;width:100%;z-index:100;border-left:none}
-    }
+
+    /* ── Chat Side ── */
+    #chat-side{flex:1;display:flex;flex-direction:column;min-width:0;height:100%;background:var(--bg)}
 
     /* ── Header ── */
-    header{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
-    .logo-wrap{width:28px;height:28px;border-radius:8px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
-    .logo-wrap img{width:28px;height:28px;object-fit:cover;border-radius:8px}
-    .logo-wrap svg{width:14px;height:14px;fill:#fff}
-    .header-title{font-size:15px;font-weight:600;color:var(--text);flex:1}
-    .header-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted)}
-    .header-btn:hover{background:var(--surface3)}
-    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
+    header{display:flex;align-items:center;gap:10px;padding:14px 20px;background:transparent;flex-shrink:0;border-bottom:1px solid transparent}
+    .logo-wrap{width:30px;height:30px;border-radius:8px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+    .logo-wrap img{width:30px;height:30px;object-fit:cover;border-radius:8px}
+    .logo-wrap svg{width:15px;height:15px;fill:#fff}
+    .header-title{font-size:15px;font-weight:600;color:var(--text);flex:1;letter-spacing:-.01em}
+    .header-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s;box-shadow:var(--shadow)}
+    .header-btn:hover{background:var(--surface2);border-color:var(--border2)}
+    .header-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 2px rgba(22,163,74,.2)}
 
-    /* ── Chat area ── */
-    #chat-area{flex:1;overflow-y:auto;padding:24px 0 12px;display:flex;flex-direction:column;gap:0;scroll-behavior:smooth}
-    #chat-area::-webkit-scrollbar{width:3px}
+    /* ── Chat Area ── */
+    #chat-area{flex:1;overflow-y:auto;padding:32px 0 16px;display:flex;flex-direction:column;scroll-behavior:smooth}
+    #chat-area::-webkit-scrollbar{width:4px}
     #chat-area::-webkit-scrollbar-track{background:transparent}
-    #chat-area::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+    #chat-area::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
 
-    /* ── Empty State ── */
-    #empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;color:var(--muted);text-align:center;padding:40px 20px}
-    .empty-logo{width:56px;height:56px;border-radius:16px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
-    .empty-logo img{width:56px;height:56px;object-fit:cover;border-radius:16px}
-    .empty-logo svg{width:24px;height:24px;fill:#fff}
-    #empty-state h2{font-size:20px;font-weight:700;color:var(--text)}
-    #empty-state p{font-size:13px;max-width:280px;color:var(--muted2)}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}
-    .chip{padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:12.5px;color:var(--text2);cursor:pointer;transition:border-color .15s,background .15s;box-shadow:var(--shadow)}
-    .chip:hover{border-color:var(--accent2);background:var(--surface2)}
+    /* ── Welcome / Empty State ── */
+    #empty-state{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;flex:1;padding:60px 48px 40px;min-height:300px}
+    #empty-state h1{font-size:36px;font-weight:700;color:var(--text);letter-spacing:-.03em;line-height:1.15;margin-bottom:6px}
+    #empty-state h2{font-size:36px;font-weight:400;color:var(--muted);letter-spacing:-.02em;line-height:1.15;margin-bottom:32px}
+    .welcome-input-wrap{width:100%;max-width:680px;background:var(--surface);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow-md);padding:16px 16px 12px;margin-bottom:24px}
+    .welcome-textarea{width:100%;background:none;border:none;outline:none;color:var(--text);font-size:15px;line-height:1.6;resize:none;font-family:inherit;min-height:48px;max-height:160px;scrollbar-width:none}
+    .welcome-textarea::placeholder{color:var(--muted)}
+    .welcome-textarea::-webkit-scrollbar{display:none}
+    .welcome-input-actions{display:flex;align-items:center;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border);margin-top:10px;gap:8px}
+    .welcome-hint{font-size:12px;color:var(--muted);flex:1}
+    .welcome-send{width:34px;height:34px;border-radius:10px;border:none;background:var(--ai-icon-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s;box-shadow:var(--shadow)}
+    .welcome-send:hover{opacity:.85;transform:scale(1.04)}
+    .welcome-send:disabled{opacity:.35;cursor:not-allowed;transform:none}
+    .welcome-send svg{width:16px;height:16px;fill:#fff}
+    .chips-row{display:flex;flex-wrap:wrap;gap:8px;max-width:680px}
+    .chip{padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:24px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+    .chip:hover{border-color:var(--border2);background:var(--surface2)}
 
-    /* ── Chat item wrapper ── */
-    .chat-item{padding:3px 20px;width:100%;max-width:780px;margin:0 auto}
+    /* ── Conversation Mode Wrapper ── */
+    .chat-item{padding:3px 24px;width:100%;max-width:800px;margin:0 auto}
 
-    /* ── User message ── */
-    .msg-user{display:flex;justify-content:flex-end;padding:4px 20px;margin-bottom:2px;animation:fadeIn .2s ease}
-    .msg-user-bubble{max-width:min(520px,85%);padding:10px 14px;border-radius:16px;border-bottom-right-radius:4px;background:var(--user-bubble);border:1px solid var(--border);font-size:14px;line-height:1.65;color:var(--text);word-break:break-word}
-    @media(prefers-color-scheme:dark){.msg-user-bubble{border:none}}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+    /* ── User Message ── */
+    .msg-user{display:flex;justify-content:flex-end;padding:4px 24px;margin-bottom:2px;animation:fadeUp .2s ease}
+    .msg-user-bubble{max-width:min(540px,85%);padding:12px 16px;border-radius:18px;border-bottom-right-radius:4px;background:var(--surface);border:1px solid var(--border);font-size:14px;line-height:1.65;color:var(--text);word-break:break-word;box-shadow:var(--shadow)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
-    /* ── AI message ── */
-    .msg-ai{display:flex;flex-direction:column;gap:4px;padding:8px 20px 4px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .2s ease}
-    .msg-ai-header{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+    /* ── AI Message ── */
+    .msg-ai{display:flex;flex-direction:column;gap:4px;padding:10px 24px 4px;max-width:800px;margin:0 auto;width:100%;animation:fadeUp .2s ease}
+    .msg-ai-header{display:flex;align-items:center;gap:7px;margin-bottom:4px}
     .ai-avatar{width:24px;height:24px;border-radius:7px;background:var(--ai-icon-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
     .ai-avatar img{width:24px;height:24px;object-fit:cover;border-radius:7px}
     .ai-avatar svg{width:12px;height:12px;fill:#fff}
     .ai-name{font-size:13px;font-weight:600;color:var(--text)}
-    .ai-body{font-size:14px;line-height:1.7;color:var(--text);word-break:break-word}
-    .ai-body p{margin-bottom:8px}.ai-body p:last-child{margin-bottom:0}
-    .ai-body code{background:var(--pill-bg);padding:1px 5px;border-radius:4px;font-size:12px;font-family:"JetBrains Mono",Menlo,monospace}
-    .ai-body pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
+    .ai-body{font-size:14px;line-height:1.75;color:var(--text);word-break:break-word}
+    .ai-body p{margin-bottom:10px}.ai-body p:last-child{margin-bottom:0}
+    .ai-body code{background:var(--pill-bg);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--text2)}
+    .ai-body pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;overflow-x:auto;margin:10px 0;box-shadow:var(--shadow)}
     .ai-body pre code{background:none;padding:0}
-    .ai-body strong{color:var(--text)}.ai-body ul,.ai-body ol{padding-left:18px;margin:6px 0}.ai-body li{margin:3px 0}
-    .ai-body a{color:var(--accent2);text-decoration:underline}
-
-    /* typing cursor */
+    .ai-body strong{color:var(--text);font-weight:600}
+    .ai-body ul,.ai-body ol{padding-left:20px;margin:6px 0}.ai-body li{margin:4px 0}
+    .ai-body a{color:var(--accent2);text-decoration:underline;text-underline-offset:2px}
     .cursor{display:inline-block;width:2px;height:14px;background:var(--muted);margin-left:2px;vertical-align:middle;animation:blink .9s step-end infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-    /* Typing indicator */
+    /* Typing */
     .typing-dots{display:flex;align-items:center;gap:4px;padding:4px 0}
     .typing-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce 1.2s ease-in-out infinite}
     .typing-dot:nth-child(2){animation-delay:.2s}
     .typing-dot:nth-child(3){animation-delay:.4s}
-    @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+    @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
 
-    /* ── Think text (agent planning) ── */
-    .msg-think{padding:2px 20px 6px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .2s ease}
-    .think-text{font-size:13px;color:var(--muted2);line-height:1.5}
+    /* Think text */
+    .msg-think{padding:2px 24px 6px;max-width:800px;margin:0 auto;width:100%}
+    .think-text{font-size:13px;color:var(--muted);line-height:1.5;font-style:italic}
 
-    /* ── Step row ── */
-    .msg-step{padding:2px 20px;max-width:780px;margin:0 auto;width:100%;animation:fadeIn .15s ease}
-    .step-row-inner{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;user-select:none;border-radius:8px;transition:background .1s}
+    /* ── Step Row ── */
+    .msg-step{padding:2px 24px;max-width:800px;margin:0 auto;width:100%;animation:fadeUp .15s ease}
+    .step-row-inner{display:flex;align-items:center;gap:8px;padding:5px 6px;cursor:pointer;user-select:none;border-radius:8px;transition:background .1s}
     .step-row-inner:hover{background:var(--surface2)}
     .step-status-ico{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid var(--border2)}
-    .step-status-ico.pending{}
     .step-status-ico.running{border-color:var(--warning);border-top-color:transparent;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .step-status-ico.completed{background:var(--muted2);border-color:var(--muted2)}
+    .step-status-ico.completed{background:var(--text2);border-color:var(--text2)}
     .step-status-ico.failed{background:var(--error);border-color:var(--error)}
     .step-check-svg{width:9px;height:9px;display:block}
-    .step-desc{flex:1;font-size:13.5px;color:var(--text2);font-weight:500;line-height:1.4;transition:color .15s}
+    .step-desc{flex:1;font-size:13.5px;color:var(--text2);font-weight:500;line-height:1.4}
     .step-desc.done{color:var(--muted)}
-    .step-chevron{font-size:11px;color:var(--muted);transition:transform .2s}
+    .step-chevron{font-size:12px;color:var(--muted);transition:transform .2s}
     .step-chevron.open{transform:rotate(90deg)}
     .step-tools-wrap{padding:4px 0 4px 24px;display:none;flex-direction:column;gap:4px}
     .step-tools-wrap.open{display:flex}
 
-    /* ── Tool chip (Manus pill style) ── */
-    .tool-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 12px 4px 8px;border:1px solid var(--pill-border);border-radius:999px;background:var(--pill-bg);cursor:pointer;max-width:100%;transition:border-color .15s,background .15s;animation:fadeIn .15s ease}
+    /* ── Tool Chip ── */
+    .tool-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px 4px 8px;border:1px solid var(--pill-border);border-radius:999px;background:var(--pill-bg);cursor:pointer;max-width:100%;transition:all .15s;animation:fadeUp .15s ease}
     .tool-chip:hover{border-color:var(--border2);background:var(--surface3)}
     .tool-chip-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text2)}
     .tool-chip-fn{font-size:13px;color:var(--text2);white-space:nowrap;flex-shrink:0}
-    .tool-chip-arg{font-size:12px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tool-chip-arg{font-size:12px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .tool-chip-status{font-size:12px;margin-left:2px;flex-shrink:0}
     .tool-chip-spin{width:12px;height:12px;border:1.5px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
     .tool-chip.calling .tool-chip-fn,.tool-chip.calling .tool-chip-arg{opacity:.7}
-    .tool-chip.called .tool-chip-status{color:var(--muted)}
     .tool-chip.error .tool-chip-fn,.tool-chip.error .tool-chip-arg{color:var(--error);opacity:.9}
+    .tool-screenshot-inline{margin:6px 0 2px 24px;border-radius:10px;overflow:hidden;border:1px solid var(--border);max-width:480px;cursor:pointer;display:block;box-shadow:var(--shadow)}
+    .tool-screenshot-inline img{width:100%;display:block;max-height:240px;object-fit:cover}
 
-    /* ── Tool screenshot inline ── */
-    .tool-screenshot-inline{margin:6px 0 2px 24px;border-radius:8px;overflow:hidden;border:1px solid var(--border);max-width:400px;cursor:pointer;display:block}
-    .tool-screenshot-inline img{width:100%;display:block;max-height:200px;object-fit:cover}
-
-    /* ── Plan bar (bottom of chat area) ── */
-    #plan-bar{display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin:8px 20px;padding:10px 14px;box-shadow:var(--shadow)}
+    /* ── Plan Bar ── */
+    #plan-bar{display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin:8px 24px;padding:10px 14px;box-shadow:var(--shadow)}
     #plan-bar.visible{display:block}
     .plan-bar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
     .plan-bar-title{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
@@ -173,73 +154,96 @@
     .plan-steps-mini.open{display:flex}
     .plan-step-mini{display:flex;align-items:center;gap:8px;padding:3px 0}
     .plan-step-mini-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center}
-    .plan-step-mini-dot.done{background:var(--muted2);border-color:var(--muted2)}
+    .plan-step-mini-dot.done{background:var(--text2);border-color:var(--text2)}
     .plan-step-mini-dot.running{border-color:var(--warning);border-top-color:transparent;animation:spin .8s linear infinite}
     .plan-step-mini-dot.failed{background:var(--error);border-color:var(--error)}
     .plan-step-mini-text{font-size:12px;color:var(--muted2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .plan-step-mini-text.done{color:var(--muted)}
 
-    /* ── Input area ── */
-    #input-area{padding:10px 18px 18px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
-    .input-box{display:flex;gap:8px;align-items:flex-end;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:10px 10px 10px 14px;transition:border-color .15s}
-    .input-box:focus-within{border-color:var(--accent2)}
+    /* ── Input Area (conversation mode) ── */
+    #input-area{padding:10px 20px 20px;background:transparent;flex-shrink:0}
+    .input-box{display:flex;gap:8px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:10px 10px 10px 16px;transition:border-color .15s,box-shadow .15s;box-shadow:var(--shadow-md)}
+    .input-box:focus-within{border-color:var(--border2);box-shadow:var(--shadow-lg)}
     #user-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:14px;line-height:1.5;resize:none;max-height:140px;min-height:22px;font-family:inherit;scrollbar-width:none}
     #user-input::placeholder{color:var(--muted)}
     #user-input::-webkit-scrollbar{display:none}
-    #send-btn,#stop-btn{width:34px;height:34px;border-radius:9px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s}
-    #send-btn{background:#1a1a2e}
+    #send-btn,#stop-btn{width:34px;height:34px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s}
+    #send-btn{background:var(--ai-icon-bg);box-shadow:var(--shadow)}
     #send-btn:hover{opacity:.85;transform:scale(1.04)}
     #send-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
     #send-btn svg{width:16px;height:16px;fill:#fff}
     #stop-btn{background:var(--surface2);border:1px solid var(--border)}
     #stop-btn:hover{background:var(--surface3)}
     #stop-btn svg{width:14px;height:14px;fill:var(--text2)}
-    .input-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;opacity:.5}
+    .input-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;opacity:.6}
 
-    /* ── Error toast ── */
-    #error-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff3f3;border:1px solid #ffd2d2;color:#cc0000;padding:9px 16px;border-radius:9px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:500;white-space:nowrap;box-shadow:var(--shadow)}
-    @media(prefers-color-scheme:dark){#error-toast{background:#2a0808;border-color:#5a1515;color:#ff7070}}
+    /* ── Error Toast ── */
+    #error-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;border:1px solid #fecaca;color:#991b1b;padding:9px 16px;border-radius:10px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:500;white-space:nowrap;box-shadow:var(--shadow-md)}
     #error-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-    /* ── TOOL PANEL (right side) ── */
-    #tool-panel-inner{display:flex;flex-direction:column;height:100%;min-width:320px}
-    #tp-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-    #tp-title{font-size:15px;font-weight:600;color:var(--text);flex:1}
-    .tp-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s}
-    .tp-btn:hover{background:var(--surface3)}
+    /* ── Tool Panel / Computer Side ── */
+    #tool-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;height:100%}
+    #tool-panel.open{width:50%;min-width:340px}
+    @media(max-width:760px){
+      #tool-panel.open{position:fixed;inset:0;width:100%;z-index:100;border-left:none}
+    }
+    #tool-panel-inner{display:flex;flex-direction:column;height:100%;min-width:340px}
+
+    /* Panel header */
+    #tp-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+    #tp-title{font-size:14px;font-weight:600;color:var(--text);flex:1}
+    .tp-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s}
+    .tp-btn:hover{background:var(--surface3);border-color:var(--border2)}
     .tp-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
-    #tp-tool-info{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-    #tp-tool-icon-box{width:40px;height:40px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+    /* Panel tool info */
+    #tp-tool-info{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+    #tp-tool-icon-box{width:36px;height:36px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text2)}
+    #tp-tool-icon-box svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5}
     #tp-tool-detail{flex:1;min-width:0}
-    #tp-tool-label{font-size:11px;color:var(--muted2);margin-bottom:3px}
+    #tp-tool-label{font-size:11px;color:var(--muted);margin-bottom:2px}
     #tp-tool-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--pill-border);border-radius:999px;background:var(--pill-bg);max-width:100%;overflow:hidden}
-    #tp-tool-pill-fn{font-size:12.5px;color:var(--text2);white-space:nowrap;flex-shrink:0}
-    #tp-tool-pill-arg{font-size:11.5px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
-    #tp-content{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;overflow:hidden}
-    #tp-urlbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0}
-    #tp-url-text{font-size:12px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-    #tp-browser-area{flex:1;position:relative;display:flex;align-items:stretch;overflow:hidden}
-    #vnc-container{position:absolute;inset:0;background:#1a1a1a}
-    #tp-screenshot{position:absolute;inset:0;object-fit:contain;width:100%;height:100%;background:var(--surface2);cursor:pointer}
-    #tp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:10px;padding:20px;text-align:center}
-    #tp-footer{display:flex;align-items:center;justify-content:center;padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;gap:10px}
-    #takeover-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:13px;font-weight:500;color:var(--text);box-shadow:var(--shadow);transition:background .15s,color .15s}
-    #takeover-btn:hover{background:var(--ai-icon-bg);color:#fff;border-color:var(--ai-icon-bg)}
-    #takeover-btn.active{background:var(--ai-icon-bg);color:#fff;border-color:var(--ai-icon-bg)}
-    #takeover-btn svg{width:14px;height:14px}
+    #tp-tool-pill-fn{font-size:12px;color:var(--text2);white-space:nowrap;flex-shrink:0;font-weight:500}
+    #tp-tool-pill-arg{font-size:11px;font-family:"JetBrains Mono",Menlo,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+
+    /* URL bar */
+    #tp-urlbar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0}
+    #tp-url-text{font-size:12px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-family:"JetBrains Mono",Menlo,monospace}
+
+    /* Browser area */
+    #tp-content{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;overflow:hidden;background:var(--surface)}
+    #tp-browser-area{flex:1;position:relative;display:flex;flex-direction:column;align-items:stretch;overflow:hidden}
+    #vnc-container{position:absolute;inset:0;background:#1a1a1a;z-index:2}
+    #tp-screenshot{position:absolute;inset:0;object-fit:contain;width:100%;height:100%;background:var(--surface2);cursor:pointer;z-index:1}
+    #tp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:10px;padding:20px;text-align:center;z-index:0}
+    #tp-empty svg{color:var(--border2)}
+    #tp-empty span{font-size:13px}
+
+    /* Panel footer */
+    #tp-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface);gap:10px}
     .tp-live-badge{display:none;align-items:center;gap:5px;font-size:11px;color:var(--success);font-weight:500}
     .tp-live-badge.on{display:flex}
     .tp-live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:livePulse 1.5s ease infinite}
     @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+    #tp-footer-status-text{font-size:12px;color:var(--muted);flex:1}
 
-    /* ── Screenshot fullscreen modal ── */
-    #screenshot-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+    /* Takeover button */
+    #takeover-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:500;color:var(--text2);box-shadow:var(--shadow);transition:all .15s;flex-shrink:0}
+    #takeover-btn:hover{background:var(--surface2);border-color:var(--border2)}
+    #takeover-btn.active{background:var(--ai-icon-bg);color:#fff;border-color:var(--ai-icon-bg)}
+    #takeover-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+
+    /* Screenshot modal */
+    #screenshot-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
     #screenshot-modal.open{display:flex}
-    #screenshot-modal img{max-width:95vw;max-height:90vh;border-radius:8px}
+    #screenshot-modal img{max-width:95vw;max-height:90vh;border-radius:10px;box-shadow:var(--shadow-lg)}
 
-    @media(max-width:520px){
+    /* Responsive */
+    @media(max-width:560px){
       .chat-item,.msg-ai,.msg-step,.msg-think,.msg-user{padding-left:14px;padding-right:14px}
-      #input-area{padding:8px 12px 14px}
+      #empty-state{padding:40px 24px 32px}
+      #empty-state h1,#empty-state h2{font-size:26px}
+      #input-area{padding:8px 12px 16px}
     }
   </style>
 </head>
@@ -250,7 +254,7 @@
   <div id="chat-side">
     <header>
       <div class="logo-wrap">
-        <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <img src="/assets/images/icon.png" alt="Dzeck" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
         <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
       <div class="header-title">Dzeck AI</div>
@@ -258,23 +262,29 @@
     </header>
 
     <div id="chat-area">
+      <!-- Welcome / Empty State -->
       <div id="empty-state">
-        <div class="empty-logo">
-          <img src="/assets/images/icon.png" alt="Dzeck AI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-          <svg viewBox="0 0 24 24" style="display:none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <h1>Halo, selamat datang</h1>
+        <h2>Apa yang ingin dikerjakan?</h2>
+        <div class="welcome-input-wrap">
+          <textarea class="welcome-textarea" id="welcome-input" placeholder="Berikan tugas untuk Dzeck AI..." rows="2" autocomplete="off"></textarea>
+          <div class="welcome-input-actions">
+            <span class="welcome-hint">Tekan Enter untuk kirim</span>
+            <button class="welcome-send" id="welcome-send-btn" onclick="sendFromWelcome()" title="Kirim">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </div>
         </div>
-        <h2>Dzeck AI</h2>
-        <p>Agent otonom dengan browser, terminal, dan memori. Tanyakan apa saja.</p>
-        <div class="chips">
+        <div class="chips-row">
           <div class="chip" onclick="sendSuggestion(this)">Apa yang bisa kamu lakukan?</div>
           <div class="chip" onclick="sendSuggestion(this)">Cari berita terbaru hari ini</div>
+          <div class="chip" onclick="sendSuggestion(this)">Buka browser dan navigasi ke Google</div>
           <div class="chip" onclick="sendSuggestion(this)">Buat script Python sederhana</div>
-          <div class="chip" onclick="sendSuggestion(this)">Jelaskan cara kerja AI</div>
         </div>
       </div>
     </div>
 
-    <!-- Plan progress bar (collapsed) -->
+    <!-- Plan progress bar -->
     <div id="plan-bar">
       <div class="plan-bar-header">
         <div class="plan-bar-title">
@@ -289,7 +299,8 @@
       <div class="plan-steps-mini" id="plan-steps-mini"></div>
     </div>
 
-    <div id="input-area">
+    <!-- Conversation Input (hidden until first message) -->
+    <div id="input-area" style="display:none">
       <div class="input-box">
         <textarea id="user-input" placeholder="Kirim pesan ke Dzeck AI..." rows="1" autocomplete="off" spellcheck="true"></textarea>
         <button id="send-btn" onclick="sendMessage()" title="Kirim">
@@ -303,13 +314,13 @@
     </div>
   </div>
 
-  <!-- ═══ TOOL PANEL (right side) ═══ -->
+  <!-- ═══ TOOL PANEL / KOMPUTER ═══ -->
   <div id="tool-panel">
     <div id="tool-panel-inner">
       <div id="tp-header">
         <div id="tp-title">Komputer Dzeck</div>
         <div class="tp-live-badge" id="tp-live-badge">
-          <span class="tp-live-dot"></span> LIVE
+          <span class="tp-live-dot"></span><span style="font-size:11px">LIVE</span>
         </div>
         <button class="tp-btn" onclick="hideToolPanel()" title="Tutup">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -317,7 +328,7 @@
       </div>
       <div id="tp-tool-info" style="display:none">
         <div id="tp-tool-icon-box">
-          <svg id="tp-tool-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"></svg>
+          <svg id="tp-tool-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"></svg>
         </div>
         <div id="tp-tool-detail">
           <div id="tp-tool-label">Dzeck sedang menggunakan</div>
@@ -334,19 +345,18 @@
       <div id="tp-content">
         <div id="tp-browser-area">
           <div id="vnc-container" style="display:none"></div>
-          <img id="tp-screenshot" style="display:none" onclick="openScreenshot(this.src)" alt="Browser"/>
+          <img id="tp-screenshot" style="display:none" onclick="openScreenshot(this.src)" alt="Screenshot browser"/>
           <div id="tp-empty">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted)"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <span style="font-size:13px;color:var(--muted)">Belum ada tampilan browser</span>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span>Browser akan muncul saat Dzeck mulai bekerja</span>
           </div>
         </div>
       </div>
       <div id="tp-footer">
-        <div class="tp-live-badge" id="tp-footer-live" style="display:flex;align-items:center">
-          <span class="tp-live-dot"></span><span style="font-size:11px;color:var(--muted);margin-left:4px" id="tp-footer-status">Menunggu aktivitas...</span>
-        </div>
-        <button id="takeover-btn" onclick="toggleTakeover()" title="Ambil kendali browser">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        <span id="tp-footer-status-text">Menunggu aktivitas...</span>
+        <div class="tp-live-badge" id="tp-footer-live-badge"></div>
+        <button id="takeover-btn" onclick="toggleTakeover()" title="Ambil / Lepas kendali browser">
+          <svg viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           <span id="takeover-label">Ambil Kendali</span>
         </button>
       </div>
@@ -362,21 +372,32 @@
   <img id="screenshot-modal-img" src="" alt="Screenshot"/>
 </div>
 
-<!-- noVNC RFB library (ES Module) -->
+<!-- noVNC RFB library - GitHub CDN serves ES module source -->
 <script type="module">
-  try {
-    const { default: RFB } = await import('https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/core/rfb.js');
-    window._RFB = RFB;
-    console.log('[noVNC] RFB library loaded');
-  } catch(e) {
-    console.warn('[noVNC] Could not load RFB library:', e);
+  const NOVNC_CDNS = [
+    'https://cdn.jsdelivr.net/gh/novnc/noVNC@v1.5.0/core/rfb.js',
+    'https://unpkg.com/@novnc/novnc@1.5.0/core/rfb.js',
+  ];
+  let loaded = false;
+  for (const cdnUrl of NOVNC_CDNS) {
+    try {
+      const m = await import(cdnUrl);
+      window._RFB = m.default || m;
+      loaded = true;
+      window.dispatchEvent(new Event('novnc-ready'));
+      console.log('[noVNC] RFB loaded from:', cdnUrl);
+      break;
+    } catch(e) {
+      console.warn('[noVNC] Failed to load from', cdnUrl, ':', e.message);
+    }
   }
+  if (!loaded) console.warn('[noVNC] All CDN attempts failed — screenshot mode only');
 </script>
 
 <script>
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // State
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 const S = {
   sessionId: null,
   vncWsPort: null,
@@ -395,30 +416,33 @@ const S = {
   latestUrl: '',
   currentToolCallId: null,
   planBarOpen: false,
+  conversationStarted: false,
 };
 
-// ─── Elements ───────────────────────────────────────────────
-const chatEl   = document.getElementById('chat-area');
-const inputEl  = document.getElementById('user-input');
-const sendBtn  = document.getElementById('send-btn');
-const stopBtn  = document.getElementById('stop-btn');
-const emptyEl  = document.getElementById('empty-state');
-const inputArea = document.getElementById('input-area');
-const toolPanel = document.getElementById('tool-panel');
-const vncContainer = document.getElementById('vnc-container');
-const tpScreenshot = document.getElementById('tp-screenshot');
-const tpEmpty  = document.getElementById('tp-empty');
-const tpUrlbar = document.getElementById('tp-urlbar');
-const tpUrlText = document.getElementById('tp-url-text');
-const tpToolInfo = document.getElementById('tp-tool-info');
-const tpLiveBadge = document.getElementById('tp-live-badge');
-const tpFooterStatus = document.getElementById('tp-footer-status');
-const planBar  = document.getElementById('plan-bar');
+// ─── Elements ──────────────────────────────────────────────────
+const chatEl        = document.getElementById('chat-area');
+const inputEl       = document.getElementById('user-input');
+const welcomeInputEl= document.getElementById('welcome-input');
+const sendBtn       = document.getElementById('send-btn');
+const stopBtn       = document.getElementById('stop-btn');
+const welcomeSendBtn= document.getElementById('welcome-send-btn');
+const emptyEl       = document.getElementById('empty-state');
+const inputArea     = document.getElementById('input-area');
+const toolPanel     = document.getElementById('tool-panel');
+const vncContainer  = document.getElementById('vnc-container');
+const tpScreenshot  = document.getElementById('tp-screenshot');
+const tpEmpty       = document.getElementById('tp-empty');
+const tpUrlbar      = document.getElementById('tp-urlbar');
+const tpUrlText     = document.getElementById('tp-url-text');
+const tpToolInfo    = document.getElementById('tp-tool-info');
+const tpLiveBadge   = document.getElementById('tp-live-badge');
+const tpFooterStatus= document.getElementById('tp-footer-status-text');
+const planBar       = document.getElementById('plan-bar');
 const planStepsMini = document.getElementById('plan-steps-mini');
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // Utilities
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 function esc(t) {
   const d = document.createElement('div');
   d.appendChild(document.createTextNode(t));
@@ -428,8 +452,8 @@ function esc(t) {
 function renderMarkdown(text) {
   if (!text) return '';
   let h = esc(text);
-  h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_,l,c)=>`<pre><code>${c}</code></pre>`);
-  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_,l,c)=>`<pre><code class="lang-${l}">${c}</code></pre>`);
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   h = h.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
   h = h.replace(/\*(.+?)\*/gs, '<em>$1</em>');
   h = h.replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>');
@@ -442,7 +466,7 @@ function renderMarkdown(text) {
 }
 
 function scrollBottom(force) {
-  const threshold = 150;
+  const threshold = 180;
   const atBottom = chatEl.scrollHeight - chatEl.clientHeight - chatEl.scrollTop < threshold;
   if (atBottom || force) chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
 }
@@ -456,22 +480,35 @@ function showError(msg) {
 
 function setStreaming(v) {
   S.isStreaming = v;
-  sendBtn.style.display = v ? 'none' : 'flex';
-  stopBtn.style.display = v ? 'flex' : 'none';
-  inputEl.disabled = v;
+  if (S.conversationStarted) {
+    sendBtn.style.display = v ? 'none' : 'flex';
+    stopBtn.style.display = v ? 'flex' : 'none';
+    inputEl.disabled = v;
+  }
+  if (welcomeSendBtn) {
+    welcomeSendBtn.disabled = v;
+  }
   document.getElementById('status-dot').style.background = v ? 'var(--warning)' : 'var(--success)';
-  if (!v) { inputEl.focus(); }
+  if (!v && S.conversationStarted) inputEl.focus();
+}
+
+function switchToConversationMode() {
+  if (S.conversationStarted) return;
+  S.conversationStarted = true;
+  if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+  inputArea.style.display = 'block';
+  setTimeout(() => { inputEl.focus(); }, 50);
 }
 
 function removeEmpty() {
   if (emptyEl && emptyEl.parentNode) emptyEl.remove();
 }
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // Message Builders
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 function appendUserMsg(text) {
-  removeEmpty();
+  switchToConversationMode();
   const el = document.createElement('div');
   el.className = 'msg-user';
   el.innerHTML = `<div class="msg-user-bubble">${renderMarkdown(text)}</div>`;
@@ -495,8 +532,7 @@ function createAiMsg() {
       <div class="typing-dots">
         <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
       </div>
-    </div>
-  `;
+    </div>`;
   chatEl.appendChild(wrap);
   scrollBottom(true);
   return wrap.querySelector('#ai-body-active');
@@ -512,9 +548,9 @@ function appendThinkText(text) {
   return el;
 }
 
-// ═══════════════════════════════════════════════════════════
-// Step rows (shown in chat)
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
+// Step Rows
+// ═════════════════════════════════════════════════════════════════
 function createStepRow(step) {
   const wrap = document.createElement('div');
   wrap.className = 'msg-step';
@@ -525,8 +561,7 @@ function createStepRow(step) {
       <div class="step-desc" id="step-desc-${step.id}">${esc(step.description || '')}</div>
       <span class="step-chevron" id="step-chev-${step.id}">›</span>
     </div>
-    <div class="step-tools-wrap" id="step-tools-${step.id}"></div>
-  `;
+    <div class="step-tools-wrap" id="step-tools-${step.id}"></div>`;
   chatEl.appendChild(wrap);
   scrollBottom();
   return wrap;
@@ -541,94 +576,67 @@ function getStepIcoHtml(status) {
 function updateStepStatus(stepId, status) {
   const ico = document.getElementById(`step-ico-${stepId}`);
   const desc = document.getElementById(`step-desc-${stepId}`);
-  if (ico) {
-    ico.className = `step-status-ico ${status}`;
-    ico.innerHTML = getStepIcoHtml(status);
-  }
+  if (ico) { ico.className = `step-status-ico ${status}`; ico.innerHTML = getStepIcoHtml(status); }
   if (desc) desc.className = `step-desc ${status === 'completed' ? 'done' : ''}`;
 }
 
 function toggleStep(stepId) {
-  const toolsEl = document.getElementById(`step-tools-${stepId}`);
-  const chevEl = document.getElementById(`step-chev-${stepId}`);
-  if (toolsEl) toolsEl.classList.toggle('open');
-  if (chevEl) chevEl.classList.toggle('open');
+  document.getElementById(`step-tools-${stepId}`)?.classList.toggle('open');
+  document.getElementById(`step-chev-${stepId}`)?.classList.toggle('open');
 }
 
 function openStep(stepId) {
-  const toolsEl = document.getElementById(`step-tools-${stepId}`);
-  const chevEl = document.getElementById(`step-chev-${stepId}`);
-  if (toolsEl) toolsEl.classList.add('open');
-  if (chevEl) chevEl.classList.add('open');
+  document.getElementById(`step-tools-${stepId}`)?.classList.add('open');
+  document.getElementById(`step-chev-${stepId}`)?.classList.add('open');
 }
 
-// ═══════════════════════════════════════════════════════════
-// Tool chips (Manus pill style)
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
+// Tool Chips
+// ═════════════════════════════════════════════════════════════════
 const TOOL_FN_MAP = {
-  'browser_navigate':   'Navigating to webpage',
-  'browser_restart':    'Restarting browser',
-  'browser_view':       'Viewing webpage',
-  'browser_click':      'Clicking element',
-  'browser_input':      'Entering text',
-  'browser_move_mouse': 'Moving mouse',
-  'browser_press_key':  'Pressing key',
-  'browser_scroll_up':  'Scrolling up',
-  'browser_scroll_down':'Scrolling down',
-  'browser_console_exec':'Executing JS code',
-  'browser_console_view':'Viewing console',
-  'browser_save_image': 'Saving image',
-  'shell_exec':         'Executing command',
-  'shell_view':         'Viewing output',
-  'shell_wait':         'Waiting for process',
-  'shell_write_to_process':'Writing to process',
-  'shell_kill_process': 'Terminating process',
-  'file_read':          'Reading file',
-  'file_write':         'Writing file',
-  'file_str_replace':   'Replacing file content',
-  'file_find_in_content':'Searching file content',
-  'file_find_by_name':  'Finding file',
-  'info_search_web':    'Searching web',
-  'message_notify_user':'Sending notification',
-  'message_ask_user':   'Asking question',
-  'web_browse':         'Browsing web',
+  'browser_navigate':'Navigating to webpage','browser_view':'Viewing webpage',
+  'browser_click':'Clicking element','browser_input':'Entering text',
+  'browser_move_mouse':'Moving mouse','browser_press_key':'Pressing key',
+  'browser_scroll_up':'Scrolling up','browser_scroll_down':'Scrolling down',
+  'browser_console_exec':'Executing JS','browser_console_view':'Viewing console',
+  'browser_save_image':'Saving image','shell_exec':'Executing command',
+  'shell_view':'Viewing output','shell_wait':'Waiting for process',
+  'shell_write_to_process':'Writing to process','shell_kill_process':'Terminating process',
+  'file_read':'Reading file','file_write':'Writing file',
+  'file_str_replace':'Replacing content','file_find_in_content':'Searching files',
+  'file_find_by_name':'Finding file','info_search_web':'Searching web',
+  'message_notify_user':'Sending notification','message_ask_user':'Asking user',
+  'web_browse':'Browsing web',
 };
-
 const TOOL_ARG_MAP = {
-  'browser_navigate': 'url', 'browser_restart': 'url', 'browser_view': 'url',
-  'browser_click': 'selector', 'browser_input': 'text', 'shell_exec': 'command',
-  'file_read': 'file', 'file_write': 'file', 'info_search_web': 'query',
-  'message_notify_user': 'message', 'web_browse': 'url',
+  'browser_navigate':'url','browser_view':'url','browser_click':'selector',
+  'browser_input':'text','shell_exec':'command','file_read':'file',
+  'file_write':'file','info_search_web':'query','message_notify_user':'message','web_browse':'url',
 };
-
 const TOOL_ICONS = {
-  browser: `<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/>`,
-  shell:   `<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>`,
-  search:  `<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
-  file:    `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,
-  message: `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
-  default: `<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0"/>`,
+  browser:`<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/>`,
+  shell:`<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>`,
+  search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+  file:`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,
+  message:`<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+  default:`<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0"/>`,
 };
 
-function getToolType(fnName) {
-  if (!fnName) return 'default';
-  if (fnName.includes('browser') || fnName.includes('web_browse')) return 'browser';
-  if (fnName.includes('shell')) return 'shell';
-  if (fnName.includes('search') || fnName.includes('info_search')) return 'search';
-  if (fnName.includes('file')) return 'file';
-  if (fnName.includes('message') || fnName.includes('notify')) return 'message';
+function getToolType(fn) {
+  if (!fn) return 'default';
+  if (fn.includes('browser') || fn.includes('web_browse')) return 'browser';
+  if (fn.includes('shell')) return 'shell';
+  if (fn.includes('search') || fn.includes('info_search')) return 'search';
+  if (fn.includes('file')) return 'file';
+  if (fn.includes('message') || fn.includes('notify')) return 'message';
   return 'default';
 }
-
-function getToolFnLabel(fnName) {
-  return TOOL_FN_MAP[fnName] || fnName || 'Tool';
-}
-
-function getToolArg(fnName, fnArgs) {
-  if (!fnArgs) return '';
-  const key = TOOL_ARG_MAP[fnName];
-  if (key && fnArgs[key]) return String(fnArgs[key]).substring(0, 60);
-  const vals = Object.values(fnArgs).filter(v => typeof v === 'string');
+function getToolFnLabel(fn) { return TOOL_FN_MAP[fn] || fn || 'Tool'; }
+function getToolArg(fn, args) {
+  if (!args) return '';
+  const key = TOOL_ARG_MAP[fn];
+  if (key && args[key]) return String(args[key]).substring(0, 60);
+  const vals = Object.values(args).filter(v => typeof v === 'string');
   if (vals.length) return vals[0].substring(0, 60);
   return '';
 }
@@ -636,7 +644,6 @@ function getToolArg(fnName, fnArgs) {
 function addToolChip(stepId, toolCallId, evt) {
   const toolsEl = document.getElementById(`step-tools-${stepId}`);
   if (!toolsEl) return;
-
   const fn = evt.function_name || evt.tool_name || '';
   const type = getToolType(fn);
   const fnLabel = getToolFnLabel(fn);
@@ -653,16 +660,10 @@ function addToolChip(stepId, toolCallId, evt) {
     </span>
     <span class="tool-chip-fn">${esc(fnLabel)}</span>
     ${arg ? `<code class="tool-chip-arg" id="chip-arg-${toolCallId}">${esc(arg)}</code>` : ''}
-    <span class="tool-chip-status" id="chip-status-${toolCallId}">
-      <span class="tool-chip-spin"></span>
-    </span>
-  `;
+    <span class="tool-chip-status" id="chip-status-${toolCallId}"><span class="tool-chip-spin"></span></span>`;
   toolsEl.appendChild(chip);
   scrollBottom();
-
   S.toolEls[toolCallId] = { chip, type, fnLabel, arg, fn };
-
-  // Update tool panel info
   updateToolPanelInfo(type, fnLabel, arg, iconSvg);
 }
 
@@ -682,27 +683,32 @@ function updateToolChip(toolCallId, evt) {
     else if (err) statusEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--error)" stroke-width="2.5"><line x1="9" y1="3" x2="3" y2="9"/><line x1="3" y1="3" x2="9" y2="9"/></svg>`;
   }
 
-  // Handle tool content (browser screenshot etc.)
   const tc = evt.tool_content;
   if (tc) {
     if (tc.type === 'browser') {
       if (tc.screenshot_b64) {
-        const src = `data:image/png;base64,${tc.screenshot_b64}`;
+        const src = tc.screenshot_b64.startsWith('data:') ? tc.screenshot_b64 : `data:image/jpeg;base64,${tc.screenshot_b64}`;
         S.latestScreenshot = src;
-        updateTpScreenshot(src, tc.url || '');
+        // Only show screenshot if VNC not connected
+        if (!S.rfb) updateTpScreenshot(src, tc.url || '');
 
-        // Show screenshot thumbnail under chip
+        // Thumbnail under chip
         const toolsEl = chip.parentElement;
         if (toolsEl) {
-          const existThumb = document.getElementById(`chip-thumb-${toolCallId}`);
-          if (!existThumb) {
-            const thumb = document.createElement('div');
+          let thumb = document.getElementById(`chip-thumb-${toolCallId}`);
+          if (!thumb) {
+            thumb = document.createElement('div');
             thumb.id = `chip-thumb-${toolCallId}`;
             thumb.className = 'tool-screenshot-inline';
-            thumb.innerHTML = `<img src="${src}" alt="screenshot" onclick="openScreenshot(this.src)"/>`;
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = 'screenshot';
+            img.onclick = () => openScreenshot(src);
+            thumb.appendChild(img);
             toolsEl.appendChild(thumb);
           } else {
-            existThumb.querySelector('img').src = src;
+            const img = thumb.querySelector('img');
+            if (img) img.src = src;
           }
         }
       }
@@ -722,9 +728,9 @@ function updateToolChip(toolCallId, evt) {
   scrollBottom();
 }
 
-// ═══════════════════════════════════════════════════════════
-// Tool Panel (right side)
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
+// Tool Panel
+// ═════════════════════════════════════════════════════════════════
 function showToolPanel() {
   toolPanel.classList.add('open');
 }
@@ -736,7 +742,7 @@ function hideToolPanel() {
 
 function openToolPanel(toolCallId) {
   showToolPanel();
-  if (S.latestScreenshot) {
+  if (S.latestScreenshot && !S.rfb) {
     tpScreenshot.src = S.latestScreenshot;
     tpScreenshot.style.display = 'block';
     tpEmpty.style.display = 'none';
@@ -748,19 +754,15 @@ function updateToolPanelInfo(type, fnLabel, arg, iconSvg) {
   document.getElementById('tp-tool-icon').innerHTML = iconSvg;
   document.getElementById('tp-tool-pill-fn').textContent = fnLabel;
   document.getElementById('tp-tool-pill-arg').textContent = arg;
-  if (type === 'browser') {
-    tpUrlbar.style.display = 'flex';
-  }
+  if (type === 'browser') tpUrlbar.style.display = 'flex';
   showToolPanel();
 }
 
 function updateTpScreenshot(src, url) {
+  if (S.rfb) return; // VNC takes priority
   tpScreenshot.src = src;
   tpScreenshot.style.display = 'block';
   tpEmpty.style.display = 'none';
-  if (vncContainer.style.display !== 'block') {
-    // only show screenshot if VNC not active
-  }
   if (url) updateTpUrl(url);
   tpFooterStatus.textContent = 'Screenshot diperbarui';
 }
@@ -771,9 +773,9 @@ function updateTpUrl(url) {
   tpUrlbar.style.display = 'flex';
 }
 
-// ═══════════════════════════════════════════════════════════
-// Plan progress bar
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
+// Plan Bar
+// ═════════════════════════════════════════════════════════════════
 function buildPlanBar(plan) {
   const steps = plan.steps || [];
   document.getElementById('plan-bar-title-text').textContent = plan.title || 'Progress Tugas';
@@ -783,8 +785,7 @@ function buildPlanBar(plan) {
     <div class="plan-step-mini" id="plan-mini-${st.id}">
       <div class="plan-step-mini-dot" id="plan-mini-dot-${st.id}"></div>
       <div class="plan-step-mini-text" id="plan-mini-text-${st.id}">${esc(st.description || '')}</div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
 function updatePlanBarCount() {
@@ -803,40 +804,48 @@ function updatePlanMiniStep(stepId, status) {
 
 function togglePlanBar() {
   S.planBarOpen = !S.planBarOpen;
-  const chev = document.getElementById('plan-bar-chevron');
-  if (chev) chev.className = `plan-bar-chevron ${S.planBarOpen ? 'open' : ''}`;
+  document.getElementById('plan-bar-chevron').className = `plan-bar-chevron ${S.planBarOpen ? 'open' : ''}`;
   planStepsMini.className = `plan-steps-mini ${S.planBarOpen ? 'open' : ''}`;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // VNC (noVNC)
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 function connectVNC(wsPort) {
-  if (!window._RFB) { console.warn('[VNC] RFB library not loaded'); return; }
+  if (!window._RFB) {
+    console.warn('[VNC] RFB library not loaded yet, retrying...');
+    setTimeout(() => connectVNC(wsPort), 1000);
+    return;
+  }
   disconnectVNC();
 
   const host = window.location.hostname;
   const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${wsProto}//${host}/vnc-proxy?port=${wsPort}`;
+  // Use the backend WebSocket proxy at /vnc-ws
+  const port = window.location.port ? `:${window.location.port}` : '';
+  const wsUrl = `${wsProto}//${host}${port}/vnc-ws`;
+
+  console.log('[VNC] Connecting to:', wsUrl);
 
   try {
     S.rfb = new window._RFB(vncContainer, wsUrl, {
       credentials: { password: '' },
       shared: true,
       wsProtocols: ['binary'],
-      scaleViewport: true,
     });
-    S.rfb.viewOnly = true;
     S.rfb.scaleViewport = true;
+    S.rfb.resizeSession = false;
+    S.rfb.viewOnly = true;
 
     S.rfb.addEventListener('connect', () => {
-      console.log('[VNC] Connected');
+      console.log('[VNC] Connected!');
       vncContainer.style.display = 'block';
       tpScreenshot.style.display = 'none';
       tpEmpty.style.display = 'none';
       tpLiveBadge.classList.add('on');
-      tpFooterStatus.textContent = 'Browser terhubung langsung';
+      tpFooterStatus.textContent = 'Browser terhubung langsung (LIVE)';
     });
+
     S.rfb.addEventListener('disconnect', () => {
       console.log('[VNC] Disconnected');
       vncContainer.style.display = 'none';
@@ -845,17 +854,23 @@ function connectVNC(wsPort) {
         tpScreenshot.src = S.latestScreenshot;
         tpScreenshot.style.display = 'block';
       }
-      tpFooterStatus.textContent = 'VNC terputus';
+      tpFooterStatus.textContent = 'Koneksi LIVE terputus';
       S.rfb = null;
     });
+
+    S.rfb.addEventListener('securityfailure', (e) => {
+      console.warn('[VNC] Security failure:', e.detail);
+    });
+
   } catch(e) {
-    console.error('[VNC] Error:', e);
+    console.error('[VNC] Connection error:', e);
+    S.rfb = null;
   }
 }
 
 function disconnectVNC() {
   if (S.rfb) {
-    try { S.rfb.disconnect(); } catch(e) {}
+    try { S.rfb.disconnect(); } catch {}
     S.rfb = null;
   }
   vncContainer.style.display = 'none';
@@ -873,18 +888,19 @@ function toggleTakeover() {
 
   if (S.isTakeover) {
     btn.classList.add('active');
-    label.textContent = 'Keluar Kendali';
-    tpFooterStatus.textContent = 'Mode interaktif aktif';
+    label.textContent = 'Lepas Kendali';
+    tpFooterStatus.textContent = 'Mode interaktif — kamu yang mengontrol';
   } else {
     btn.classList.remove('active');
     label.textContent = 'Ambil Kendali';
     tpFooterStatus.textContent = 'Mode tampilan saja';
+    if (S.rfb) S.rfb.viewOnly = true;
   }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // SSE Event Handler
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 function handleEvent(evt) {
   if (!evt || !evt.type) return;
 
@@ -894,6 +910,7 @@ function handleEvent(evt) {
       S.sessionId = evt.session_id;
       if (evt.vnc_ws_port) {
         S.vncWsPort = evt.vnc_ws_port;
+        // Auto-connect VNC
         connectVNC(evt.vnc_ws_port);
         showToolPanel();
       }
@@ -908,21 +925,13 @@ function handleEvent(evt) {
       const plan = evt.plan;
 
       if (status === 'creating') {
-        if (!S.aiBodyEl) {
-          S.aiBodyEl = createAiMsg();
-          S.aiContent = '';
-        }
+        if (!S.aiBodyEl) { S.aiBodyEl = createAiMsg(); S.aiContent = ''; }
         break;
       }
 
       if ((status === 'created' || status === 'running') && plan) {
         S.plan = plan;
-        // Remove typing bubble
-        if (S.aiBodyEl) {
-          S.aiBodyEl.closest('.msg-ai')?.remove();
-          S.aiBodyEl = null; S.aiContent = '';
-        }
-        // Create step rows in chat
+        if (S.aiBodyEl) { S.aiBodyEl.closest('.msg-ai')?.remove(); S.aiBodyEl = null; S.aiContent = ''; }
         (plan.steps || []).forEach(st => {
           if (!document.getElementById(`step-wrap-${st.id}`)) {
             createStepRow(st);
@@ -950,64 +959,59 @@ function handleEvent(evt) {
       if (status === 'completed' && plan) {
         S.plan = plan;
         updatePlanBarCount();
-        (plan.steps || []).forEach(st => {
-          updateStepStatus(st.id, st.status || 'completed');
-          updatePlanMiniStep(st.id, st.status || 'completed');
-        });
+        (plan.steps || []).forEach(st => updateStepStatus(st.id, st.status || 'completed'));
       }
       break;
     }
 
     case 'step': {
-      const step = evt.step || {};
-      const status = evt.status || '';
-      const stepId = step.id;
-      if (!stepId) break;
+      const step = evt.step;
+      if (!step) break;
+      S.currentStepId = step.id;
 
-      if (S.plan) {
-        const ps = S.plan.steps?.find(s => s.id === stepId);
-        if (ps) ps.status = status;
+      if (!document.getElementById(`step-wrap-${step.id}`)) {
+        createStepRow(step);
+        S.stepEls[step.id] = true;
+        S.toolsByStep[step.id] = [];
       }
 
-      updateStepStatus(stepId, status);
-      updatePlanMiniStep(stepId, status);
-      updatePlanBarCount();
-
+      const status = step.status || '';
       if (status === 'running') {
-        S.currentStepId = stepId;
-        openStep(stepId);
-        tpFooterStatus.textContent = step.description || 'Agent sedang bekerja...';
-        if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
+        updateStepStatus(step.id, 'running');
+        openStep(step.id);
+        updatePlanMiniStep(step.id, 'running');
+      } else if (status === 'completed' || status === 'failed') {
+        updateStepStatus(step.id, status);
+        updatePlanMiniStep(step.id, status);
+        updatePlanBarCount();
       }
       break;
     }
 
     case 'tool': {
-      const status = evt.status || '';
-      const toolCallId = evt.tool_call_id || `tool_${Date.now()}`;
-      const stepId = S.currentStepId;
+      const toolCallId = evt.tool_call_id || evt.id || randomId();
+      S.currentToolCallId = toolCallId;
+      const stepId = evt.step_id || S.currentStepId;
+      const evtStatus = evt.status || '';
 
-      if (status === 'calling') {
-        S.currentToolCallId = toolCallId;
-        if (stepId) {
-          if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
+      if (evtStatus === 'calling' || evtStatus === 'called') {
+        if (!S.toolsByStep[stepId]) S.toolsByStep[stepId] = [];
+        const existing = S.toolsByStep[stepId].includes(toolCallId);
+
+        if (!existing && evtStatus === 'calling') {
           S.toolsByStep[stepId].push(toolCallId);
           addToolChip(stepId, toolCallId, evt);
+        } else if (existing || evtStatus === 'called') {
+          updateToolChip(toolCallId, evt);
         }
-        showToolPanel();
-      }
-
-      if (status === 'called' || status === 'error') {
+      } else {
         updateToolChip(toolCallId, evt);
       }
       break;
     }
 
     case 'message_start':
-      if (S.aiBodyEl) {
-        S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent);
-        S.aiBodyEl.removeAttribute('id');
-      }
+      if (S.aiBodyEl) { S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent); S.aiBodyEl.removeAttribute('id'); }
       S.aiBodyEl = createAiMsg();
       S.aiContent = '';
       break;
@@ -1015,10 +1019,7 @@ function handleEvent(evt) {
     case 'message_chunk': {
       const token = evt.chunk || '';
       if (!token) break;
-      if (!S.aiBodyEl) {
-        S.aiBodyEl = createAiMsg();
-        S.aiContent = '';
-      }
+      if (!S.aiBodyEl) { S.aiBodyEl = createAiMsg(); S.aiContent = ''; }
       S.aiContent += token;
       S.aiBodyEl.innerHTML = renderMarkdown(S.aiContent) + '<span class="cursor"></span>';
       scrollBottom();
@@ -1040,7 +1041,7 @@ function handleEvent(evt) {
     case 'error':
       showError(evt.error || 'Terjadi kesalahan');
       if (S.aiBodyEl) {
-        S.aiBodyEl.innerHTML = `<em style="color:var(--error)">Gagal: ${esc(evt.error || 'Error')}</em>`;
+        S.aiBodyEl.innerHTML = `<em style="color:var(--error)">Gagal: ${esc(evt.error || 'Error tidak diketahui')}</em>`;
         S.aiBodyEl = null; S.aiContent = '';
       }
       break;
@@ -1054,24 +1055,25 @@ function finalizeResponse() {
   } else if (S.aiBodyEl) {
     S.aiBodyEl.closest('.msg-ai')?.remove();
   }
-  S.aiBodyEl = null;
-  S.aiContent = '';
+  S.aiBodyEl = null; S.aiContent = '';
   S.currentStepId = null;
   setStreaming(false);
   scrollBottom(true);
+  tpFooterStatus.textContent = 'Selesai';
 }
 
-// ═══════════════════════════════════════════════════════════
+function randomId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// ═════════════════════════════════════════════════════════════════
 // Send Message
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 let messageHistory = [];
 
-async function sendMessage() {
-  const text = inputEl.value.trim();
+async function doSend(text) {
   if (!text || S.isStreaming) return;
 
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
   appendUserMsg(text);
   messageHistory.push({ role: 'user', content: text });
 
@@ -1124,9 +1126,24 @@ async function sendMessage() {
     if (err.name === 'AbortError') return;
     console.error(err);
     if (S.aiBodyEl) { S.aiBodyEl.innerHTML = '<em style="color:var(--error)">Koneksi gagal. Coba lagi.</em>'; S.aiBodyEl = null; }
-    showError('Gagal terhubung ke AI.');
+    showError('Gagal terhubung ke AI. Periksa koneksi Anda.');
     setStreaming(false);
   }
+}
+
+function sendFromWelcome() {
+  const text = welcomeInputEl.value.trim();
+  if (!text || S.isStreaming) return;
+  welcomeInputEl.value = '';
+  doSend(text);
+}
+
+function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || S.isStreaming) return;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  doSend(text);
 }
 
 function stopGeneration() {
@@ -1135,23 +1152,32 @@ function stopGeneration() {
 }
 
 function sendSuggestion(el) {
-  inputEl.value = el.textContent;
-  sendMessage();
+  if (S.isStreaming) return;
+  const text = el.textContent;
+  if (welcomeInputEl) welcomeInputEl.value = '';
+  doSend(text);
 }
 
-// ─── Keyboard ───────────────────────────────────────────────
+// ─── Keyboard handlers ─────────────────────────────────────────
+welcomeInputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendFromWelcome(); }
+});
+welcomeInputEl.addEventListener('input', () => {
+  welcomeInputEl.style.height = 'auto';
+  welcomeInputEl.style.height = Math.min(welcomeInputEl.scrollHeight, 160) + 'px';
+});
+
 inputEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-
 inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 });
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // Screenshot modal
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 function openScreenshot(src) {
   document.getElementById('screenshot-modal-img').src = src;
   document.getElementById('screenshot-modal').classList.add('open');
@@ -1163,10 +1189,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeScreenshot();
 });
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // Init
-// ═══════════════════════════════════════════════════════════
-inputEl.focus();
+// ═════════════════════════════════════════════════════════════════
+welcomeInputEl.focus();
 </script>
 </body>
 </html>
