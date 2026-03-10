@@ -921,44 +921,128 @@ class DzeckAgent:
         return "en"
 
     def _is_simple_query(self, user_message: str) -> bool:
+        """
+        Determine if a query can be answered directly without Plan-Act tools.
+        
+        Returns True (respond directly) when:
+        - Conversational / social messages
+        - Knowledge/explanation questions answerable from training data
+        - Math, translations, creative writing, code explanation
+        
+        Returns False (use Plan-Act) when:
+        - Real-time info needed (news, prices, weather, current events)
+        - Web browsing / URL access requested
+        - File system operations
+        - Shell/code execution
+        - Complex multi-step creation tasks
+        - Research tasks that need web search
+        - Any URL present in the message
+        """
         msg = user_message.strip().lower()
-        word_count = len(msg.split())
-        if word_count <= 4:
-            simple_patterns = [
-                r"\bhi\b", r"\bhello\b", r"\bhey\b",
-                r"\bhalo\b", r"\bhai\b", r"\bhei\b",
-                r"\bthanks\b", r"\bthank you\b",
-                r"\bterima kasih\b", r"\bmakasih\b",
-                r"\bok\b", r"\bokay\b", r"\boke\b",
-                r"\bbaik\b", r"\bsiap\b",
-                r"\byes\b", r"\bno\b", r"\bya\b", r"\btidak\b",
-                r"\bbye\b", r"\bgoodbye\b", r"\bsampai jumpa\b",
-                r"\bgood morning\b", r"\bgood night\b",
-                r"\bselamat pagi\b", r"\bselamat malam\b",
-                r"\bwho are you\b", r"\bsiapa kamu\b",
-                r"\bhow are you\b", r"\bapa kabar\b",
-            ]
-            for pattern in simple_patterns:
-                if re.search(pattern, msg):
-                    return True
+        raw = user_message.strip()
 
-        knowledge_starters = [
-            "what is", "what are", "who is", "who are",
-            "when was", "when is", "where is",
-            "explain", "define", "describe",
-            "apa itu", "siapa", "kapan", "dimana",
-            "jelaskan", "ceritakan",
+        # 0. Any URL in message → needs browser/search tool
+        if re.search(r'https?://', raw):
+            return False
+
+        # 1. Explicit tool-requiring patterns → ALWAYS use Plan-Act
+        tool_required_patterns = [
+            # Real-time / current info
+            r'\b(today|sekarang|hari ini|saat ini|terbaru|latest|current|now|live)\b',
+            r'\b(news|berita|harga|price|cuaca|weather|stock|saham|kurs|exchange rate)\b',
+            r'\b(trending|viral|populer|terkini|breaking)\b',
+            # Action-based tasks
+            r'\b(buka|buka situs|browse|visit|navigat|go to|open|akses|cek website|kunjungi)\b',
+            r'\b(download|unduh|upload|scrape|crawl)\b',
+            r'\b(install|uninstall|pip install|apt-get|npm install)\b',
+            r'\b(run|execute|jalankan|eksekusi|exec)\b',
+            r'\b(buat file|create file|write file|tulis file|simpan file|save file)\b',
+            r'\b(buat folder|create folder|mkdir|hapus file|delete file)\b',
+            r'\b(deploy|publish|hosting|server|api endpoint)\b',
+            r'\b(bash|shell|command|cmd|terminal|script\.sh|\.py|\.js|\.ts)\b',
+            # Complex creation
+            r'\b(buat website|create website|build website|buat aplikasi|create app|build app)\b',
+            r'\b(buat program|create program|tulis program|write program|code this|coding)\b',
+            r'\b(research|riset|investigasi|investigate|analisis mendalam|analyze)\b',
+            # File references (paths)
+            r'[/\\][a-zA-Z0-9_.-]+\.[a-zA-Z]{2,4}',
         ]
-        action_patterns = [
-            r"\bhttp", r"[/\\]", r"```",
-            r"\bfile\b", r"\binstall\b", r"\brun\b",
-            r"\bcreate\b", r"\bbuild\b", r"\bwrite\b",
-            r"\bbuat\b", r"\btulis\b", r"\bjalankan\b",
+        for pattern in tool_required_patterns:
+            if re.search(pattern, msg):
+                return False
+
+        # 2. Pure conversational → always direct
+        conversational = [
+            r'^\s*(hi|hello|hey|halo|hai|hei|howdy)\s*[!.]?\s*$',
+            r'^\s*(thanks?|thank you|terima kasih|makasih|thx)\s*[!.]?\s*$',
+            r'^\s*(ok|okay|oke|baik|siap|noted|got it|paham)\s*[!.]?\s*$',
+            r'^\s*(yes|no|ya|tidak|nope|yep|sure)\s*[!.]?\s*$',
+            r'^\s*(bye|goodbye|sampai jumpa|dadah|see you)\s*[!.]?\s*$',
+            r'^\s*(good morning|good night|selamat pagi|selamat malam|selamat siang|selamat sore)\s*[!.]?\s*$',
+            r'\b(how are you|apa kabar|kabar gimana|how\'s it going)\b',
+            r'\b(who are you|siapa kamu|siapa anda|kamu siapa|anda siapa)\b',
+            r'\b(what can you do|apa yang bisa kamu|kemampuan kamu|fitur kamu)\b',
+            r'\b(are you (an )?ai|kamu ai|kamu robot|apakah kamu)\b',
+        ]
+        for pattern in conversational:
+            if re.search(pattern, msg):
+                return True
+
+        # 3. Knowledge/explanation questions — answerable from training data
+        #    Only if they don't contain real-time signals
+        knowledge_starters = [
+            "what is", "what are", "what does", "what was",
+            "who is", "who are", "who was",
+            "when was", "when did", "where is", "where was",
+            "why is", "why are", "why does", "why did",
+            "how does", "how do", "how is", "how was",
+            "explain", "define", "describe", "tell me about",
+            "what's the difference", "compare",
+            "apa itu", "apa yang", "apa bedanya",
+            "siapa", "kapan", "dimana", "mengapa", "kenapa",
+            "jelaskan", "ceritakan", "definisikan", "apa artinya",
+            "bagaimana cara", "bagaimana",
+        ]
+        # Signals that a "what is" question still needs real-time data
+        realtime_signals = [
+            r'\b(now|today|current|latest|2024|2025|2026|terbaru|sekarang|hari ini|saat ini)\b',
+            r'\b(price|harga|cost|biaya|rate|nilai|kurs)\b',
+            r'\b(news|berita|update|terkini|terbaru)\b',
         ]
         for starter in knowledge_starters:
-            if msg.startswith(starter):
-                if not any(re.search(p, msg) for p in action_patterns):
+            if msg.startswith(starter) or f' {starter} ' in msg:
+                if not any(re.search(p, msg) for p in realtime_signals):
                     return True
+
+        # 4. Math/calculation questions → direct
+        if re.search(r'(\d+[\s]*[\+\-\*\/\^%][\s]*\d+|berapa|calculate|hitung|compute|convert)', msg):
+            if not re.search(r'\b(currency|mata uang|kurs|exchange|rate)\b', msg):
+                return True
+
+        # 5. Translation requests → direct
+        if re.search(r'\b(translate|terjemahkan|translation|terjemahan|in english|dalam bahasa|ke bahasa)\b', msg):
+            return True
+
+        # 6. Creative writing (short) → direct
+        if re.search(r'\b(write a poem|write a story|puisi|cerita pendek|story about|poem about|buat puisi|buat cerita)\b', msg):
+            word_count = len(msg.split())
+            if word_count < 20:  # Only short creative prompts — long ones might need research
+                return True
+
+        # 7. Code explanation (not execution) → direct
+        if re.search(r'\b(explain (this )?code|what does this code|apa fungsi|fungsi dari|code ini|kode ini)\b', msg):
+            return True
+
+        # 8. Short simple messages (≤ 6 words with no action signals) → direct
+        word_count = len(msg.split())
+        if word_count <= 6:
+            simple_action = re.search(
+                r'\b(cari|search|find|buka|open|buat|create|make|build|tulis|write|jalankan|run)\b',
+                msg
+            )
+            if not simple_action:
+                return True
+
         return False
 
     async def run_planner_async(
@@ -1011,17 +1095,21 @@ class DzeckAgent:
             message=parsed.get("message", ""),
         )
 
-    async def _handle_tool_call_async(
+    async def _run_tool_streaming(
         self,
         fn_name: str,
         fn_args: Dict[str, Any],
         tool_call_id: str,
         step: Step,
-        iteration: int,
-    ) -> tuple:
-        """Execute tool call and yield events. Returns (result_str, events_list)."""
-        events = []
-
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Execute a single tool call and yield events in real-time:
+        1. Yields "calling" event IMMEDIATELY (shows spinner to user)
+        2. Awaits tool execution
+        3. Yields "called" or "error" event with results
+        4. Yields a special "__result__" event with result_summary for exec_messages
+        5. If idle/task_complete, yields "__step_done__" sentinel
+        """
         if fn_name in ("idle", "task_complete"):
             step.status = ExecutionStatus.COMPLETED
             step.success = fn_args.get("success", True)
@@ -1029,32 +1117,44 @@ class DzeckAgent:
             if not step.success:
                 step.status = ExecutionStatus.FAILED
             status_enum = StepStatus.COMPLETED if step.success else StepStatus.FAILED
-            events.append(make_event("step", status=status_enum.value, step=step.to_dict()))
-            return "STEP_DONE", events
+            yield make_event("step", status=status_enum.value, step=step.to_dict())
+            yield {"type": "__step_done__"}
+            return
 
         resolved = resolve_tool_name(fn_name)
         if resolved is None:
-            return "Unknown tool '{}'.".format(fn_name), events
+            yield {"type": "__result__", "value": "Unknown tool '{}'.".format(fn_name)}
+            return
 
         toolkit_name = get_toolkit_name(resolved)
-        events.append(make_event(
+
+        # ── 1. Emit "calling" IMMEDIATELY so user sees the spinner right away ──
+        yield make_event(
             "tool",
             status=ToolStatus.CALLING.value,
             tool_name=toolkit_name,
             function_name=resolved,
             function_args=fn_args,
             tool_call_id=tool_call_id,
-        ))
-
-        loop = asyncio.get_event_loop()
-        tool_result = await loop.run_in_executor(
-            None, lambda: execute_tool(resolved, fn_args)
         )
+
+        # message_notify_user and message_ask_user are rendered as plain text
+        # directly by AgentToolCard on the frontend — no separate event needed.
+
+        # ── 3. Execute the tool (await = real async, unblocks event loop) ──
+        loop = asyncio.get_event_loop()
+        _res = resolved
+        _args = dict(fn_args)
+        tool_result = await loop.run_in_executor(
+            None, lambda: execute_tool(_res, _args)
+        )
+
         tool_content = build_tool_content(resolved, tool_result)
         result_status = ToolStatus.CALLED if tool_result.success else ToolStatus.ERROR
         fn_result = str(tool_result.message)[:3000] if tool_result.message else ""
 
-        events.append(make_event(
+        # ── 4. Emit result event ──
+        yield make_event(
             "tool",
             status=result_status.value,
             tool_name=toolkit_name,
@@ -1063,12 +1163,13 @@ class DzeckAgent:
             tool_call_id=tool_call_id,
             function_result=fn_result,
             tool_content=tool_content,
-        ))
+        )
 
         result_summary = tool_result.message or "No result"
         if len(result_summary) > 4000:
             result_summary = result_summary[:4000] + "...[truncated]"
-        return result_summary, events
+
+        yield {"type": "__result__", "value": result_summary}
 
     async def execute_step_async(
         self,
@@ -1104,9 +1205,10 @@ class DzeckAgent:
 
         for iteration in range(self.max_tool_iterations):
             try:
+                _msgs = list(exec_messages)
                 api_result = await loop.run_in_executor(
                     None,
-                    lambda: call_api_with_retry(exec_messages, tools=TOOL_SCHEMAS),
+                    lambda: call_api_with_retry(_msgs, tools=TOOL_SCHEMAS),
                 )
                 text, tool_calls = _extract_cf_response(api_result)
 
@@ -1122,15 +1224,18 @@ class DzeckAgent:
                                 fn_args = {}
 
                         tc_id = "tc_{}_{}_{}".format(step.id, iteration, tc_idx)
+                        result_str = "Done"
 
-                        result_str, tool_events = await self._handle_tool_call_async(
-                            fn_name, fn_args, tc_id, step, iteration
-                        )
-                        for ev in tool_events:
-                            yield ev
+                        async for ev in self._run_tool_streaming(fn_name, fn_args, tc_id, step):
+                            if ev.get("type") == "__step_done__":
+                                step_done = True
+                                break
+                            elif ev.get("type") == "__result__":
+                                result_str = ev.get("value", "Done")
+                            else:
+                                yield ev
 
-                        if result_str == "STEP_DONE":
-                            step_done = True
+                        if step_done:
                             break
 
                         exec_messages.append({
@@ -1138,7 +1243,7 @@ class DzeckAgent:
                             "content": (
                                 "Result of {}: {}\n\n"
                                 "Continue. Call idle when step is fully done."
-                            ).format(fn_name, result_str or "Done"),
+                            ).format(fn_name, result_str),
                         })
 
                     if step_done:
@@ -1180,13 +1285,19 @@ class DzeckAgent:
                             continue
 
                         tc_id = "tc_{}_{}_json".format(step.id, iteration)
-                        result_str, tool_events = await self._handle_tool_call_async(
-                            resolved_name, tool_args, tc_id, step, iteration
-                        )
-                        for ev in tool_events:
-                            yield ev
+                        result_str = "Done"
+                        step_done = False
 
-                        if result_str == "STEP_DONE":
+                        async for ev in self._run_tool_streaming(resolved_name, tool_args, tc_id, step):
+                            if ev.get("type") == "__step_done__":
+                                step_done = True
+                                break
+                            elif ev.get("type") == "__result__":
+                                result_str = ev.get("value", "Done")
+                            else:
+                                yield ev
+
+                        if step_done:
                             return
 
                         exec_messages.append({
@@ -1290,23 +1401,59 @@ class DzeckAgent:
             message=user_message,
         )
         summarize_system = (
-            SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with plain text only. "
-            "Do NOT output JSON. Give a clear, helpful summary of the results."
+            SYSTEM_PROMPT
+            + "\n\nCRITICAL INSTRUCTION: You MUST respond with PLAIN TEXT ONLY. "
+            "NEVER output JSON, markdown code blocks, or any structured format. "
+            "Write natural language sentences only. "
+            "If you output JSON or a code block, the user will see broken text."
         )
         messages = [
             {"role": "system", "content": summarize_system},
             {"role": "user", "content": prompt},
         ]
 
+        def _strip_json_wrapper(text: str) -> str:
+            """If the model accidentally wraps response in JSON, extract the text value."""
+            t = text.strip()
+            if t.startswith("{") and t.endswith("}"):
+                try:
+                    obj = json.loads(t)
+                    for key in ("message", "text", "response", "content", "summary", "result"):
+                        if key in obj and isinstance(obj[key], str):
+                            return obj[key]
+                except Exception:
+                    pass
+            if t.startswith("```") and t.endswith("```"):
+                inner = t[3:]
+                if inner.startswith("json"):
+                    inner = inner[4:]
+                inner = inner.rstrip("`").strip()
+                try:
+                    obj = json.loads(inner)
+                    for key in ("message", "text", "response", "content", "summary", "result"):
+                        if key in obj and isinstance(obj[key], str):
+                            return obj[key]
+                except Exception:
+                    pass
+                return inner
+            return text
+
         try:
+            loop = asyncio.get_event_loop()
+            full_text = await loop.run_in_executor(
+                None, lambda: call_cf_streaming(messages)
+            )
+
+            if not full_text:
+                full_text = "Task completed successfully."
+
+            cleaned = _strip_json_wrapper(full_text)
+
             yield make_event("message_start", role="assistant")
-            got_any = False
-            async for chunk in call_cf_streaming_realtime(messages):
-                if chunk:
-                    got_any = True
-                    yield make_event("message_chunk", chunk=chunk, role="assistant")
-            if not got_any:
-                yield make_event("message_chunk", chunk="Task completed successfully.", role="assistant")
+            chunk_size = 12
+            for i in range(0, len(cleaned), chunk_size):
+                yield make_event("message_chunk", chunk=cleaned[i:i + chunk_size], role="assistant")
+                await asyncio.sleep(0.01)
             yield make_event("message_end", role="assistant")
         except Exception:
             yield make_event("message_start", role="assistant")

@@ -459,9 +459,9 @@ export default function ChatScreen() {
             continue;
           }
 
-          // ── Visible events: message (plan intro) and errors ──
+          // ── Visible events: message, wait (agent asking user), errors ──
           const shouldShow =
-            event.type === "message" || event.type === "error";
+            event.type === "message" || event.type === "error" || event.type === "wait";
 
           if (shouldShow) {
             setAgentEvents((prev) => [

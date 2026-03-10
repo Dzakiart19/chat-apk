@@ -35,9 +35,9 @@ export function AgentMessage({ event }: AgentMessageProps) {
             <View style={styles.agentIcon}>
               <Ionicons name="flash" size={12} color="#FFFFFF" />
             </View>
-            <Text style={styles.agentName}>dzeck</Text>
-            <View style={styles.agentBadge}>
-              <Text style={styles.agentBadgeText}>Lite</Text>
+            <Text style={styles.agentName}>Dzeck</Text>
+            <View style={[styles.agentBadge, styles.agentBadgeAgent]}>
+              <Text style={[styles.agentBadgeText, styles.agentBadgeTextAgent]}>Agent</Text>
             </View>
           </View>
           <View style={styles.messageBubble}>
@@ -56,6 +56,27 @@ export function AgentMessage({ event }: AgentMessageProps) {
             <Ionicons name="rocket" size={15} color="#6C5CE7" />
             <Text style={styles.titleText} numberOfLines={2}>
               {event.title || ""}
+            </Text>
+          </View>
+        </View>
+      );
+
+    case "wait":
+      if (!event.prompt) return null;
+      return (
+        <View style={styles.container}>
+          <View style={styles.agentHeader}>
+            <View style={styles.agentIcon}>
+              <Ionicons name="help-circle" size={12} color="#FFFFFF" />
+            </View>
+            <Text style={styles.agentName}>dzeck</Text>
+            <View style={[styles.agentBadge, styles.agentBadgeWait]}>
+              <Text style={[styles.agentBadgeText, styles.agentBadgeTextWait]}>Menunggu</Text>
+            </View>
+          </View>
+          <View style={styles.messageBubble}>
+            <Text style={styles.messageText} selectable>
+              {event.prompt}
             </Text>
           </View>
         </View>
@@ -110,6 +131,22 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 10,
     color: "#8E8E93",
+  },
+  agentBadgeAgent: {
+    backgroundColor: "rgba(108,92,231,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(108,92,231,0.25)",
+  },
+  agentBadgeTextAgent: {
+    color: "#7C6AE8",
+  },
+  agentBadgeWait: {
+    backgroundColor: "rgba(191,90,242,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(191,90,242,0.3)",
+  },
+  agentBadgeTextWait: {
+    color: "#BF5AF2",
   },
   messageBubble: {
     paddingLeft: 28,
